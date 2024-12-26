@@ -33,7 +33,7 @@ const DashboardHero = () => {
         onClick={handleMonetizeData}
         className="bg-black rounded-full flex py-2 px-4 items-center font-semibold w-[300px] justify-between"
       >
-        Restrict Data Now
+        Monetize Your Data here!
         <CaretCircleRight
           size={36}
           color="#fafafa"
