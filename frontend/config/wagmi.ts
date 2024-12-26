@@ -1,3 +1,17 @@
+<<<<<<< HEAD:client/config/wagmi.ts
+'use client';
+
+import { liskSepolia } from 'viem/chains';
+import { createConfig, http } from 'wagmi';
+
+
+export const config = createConfig({
+  chains: [liskSepolia],
+  transports: {
+    [liskSepolia.id]: http(),
+  },
+});
+=======
 'use client';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import {
@@ -57,3 +71,4 @@ export function useWagmiConfig() {
     return wagmiConfig;
   }, [projectId]);
 }
+>>>>>>> f5e3ccd26b17d0597fa74561724a9f25c9dc1a3f:frontend/config/wagmi.ts

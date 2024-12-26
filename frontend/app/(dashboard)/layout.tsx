@@ -1,13 +1,10 @@
-import Sidebar from "@/components/dashboard/sidebar/sidebar"
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default function DashboardLayout({
-    children, // will be a page or nested layout
-  }: {
-    children: React.ReactNode
-  }) {
-    return (
-      <Sidebar>
-        {children}
-      </Sidebar>
-    )
-  }
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}
