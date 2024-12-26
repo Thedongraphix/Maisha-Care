@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useState } from "react"
 import { Menu, X } from 'lucide-react'
 import { Andre,Steph ,Wambugu,Logo, Dashboard } from "@/constants/img"
+import Button from "@/components/ui/button"
 
 export default function LandingPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -163,32 +164,62 @@ export default function LandingPage() {
         </section>
 
         {/* Contact Section */}
-        <section id="contact" className="bg-gray-100 py-20">
-          <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center mb-12">Contact Us</h2>
-            <div className="max-w-lg mx-auto">
-              <form className="space-y-6">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">Name</label>
-                  <input type="text" id="name" name="name" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#ff6f91] focus:ring-[#ff6f91]" />
+        <section id="contact" className="bg-gradient-to-br from-gray-100 to-gray-200 py-20">
+        <div className="container mx-auto px-4">
+          <h2 className="text-4xl font-bold text-center mb-12 text-gray-800">Contact Us</h2>
+          <Card className="max-w-2xl mx-auto shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-2xl font-semibold text-center text-gray-700">We'd love to hear from you</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="text-sm font-medium text-gray-700">Name</Label>
+                    <div className="relative">
+                      <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                      <Input type="text" id="name" name="name" placeholder="John Doe" className="pl-10" required />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-sm font-medium text-gray-700">Email</Label>
+                    <div className="relative">
+                      <MailIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                      <Input type="email" id="email" name="email" placeholder="johndoe@example.com" className="pl-10" required />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-                  <input type="email" id="email" name="email" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#ff6f91] focus:ring-[#ff6f91]" />
+                <div className="space-y-2">
+                  <Label htmlFor="message" className="text-sm font-medium text-gray-700">Message</Label>
+                  <div className="relative">
+                    <MessageSquareIcon className="absolute left-3 top-3 text-gray-400 h-5 w-5" />
+                    <Textarea id="message" name="message" placeholder="Your message here..." className="pl-10 min-h-[120px]" required />
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="message" className="block text-sm font-medium text-gray-700">Message</label>
-                  <textarea id="message" name="message" rows={4} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#ff6f91] focus:ring-[#ff6f91]"></textarea>
-                </div>
-                <div>
-                  <button type="submit" className="w-full bg-[#ff6f91] text-white px-6 py-3 rounded-md font-semibold hover:bg-[#ff5f81] transition duration-300">
-                    Send Message
-                  </button>
-                </div>
+                <Button 
+                  type="submit" 
+                  className="w-full bg-gradient-to-r from-[#ff6f91] to-[#ff5f81] hover:from-[#ff5f81] hover:to-[#ff4f71] text-white font-semibold py-3 rounded-md transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#ff6f91] focus:ring-opacity-50"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Sending...
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center">
+                      <SendIcon className="mr-2 h-5 w-5" /> Send Message
+                    </span>
+                  )}
+                </Button>
               </form>
-            </div>
-          </div>
-        </section>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
       </main>
 
       <footer className="bg-gray-800 text-white py-8">
