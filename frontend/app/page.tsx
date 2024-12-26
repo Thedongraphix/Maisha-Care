@@ -2,13 +2,21 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useState } from "react"
-import { Menu, X } from 'lucide-react'
+import { FormEvent, useState } from "react"
+import { MailIcon, Menu, MessageSquareIcon, SendIcon, UserIcon, X } from 'lucide-react'
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Andre,Steph ,Wambugu,Logo, Dashboard } from "@/constants/img"
 import Button from "@/components/ui/button"
+import { Input } from "antd"
+import { Label, Textarea } from "@headlessui/react"
 
 export default function LandingPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
+    throw new Error("Function not implemented.")
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
