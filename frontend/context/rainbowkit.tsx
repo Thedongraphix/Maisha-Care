@@ -6,7 +6,7 @@ import { http, WagmiProvider } from "wagmi";
 import { anvil } from "wagmi/chains";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { ReactNode } from "react";
-import { State } from "wagmi";
+
 
 const config = getDefaultConfig({
   appName: "MaishaCare",
