@@ -19,6 +19,10 @@ declare module '@privy-io/react-auth' {
   }
 
   export interface User {
+    email: any;
+    google: any;
+    email: any;
+    google: any;
     id: string;
     phoneNumber?: string;
   }

@@ -26,9 +26,7 @@ const SignupContent: React.FC = () => {
 
   const handleLogin = () => {
     try {
-      login({
-        disableSignup: false, // Allow both login and signup
-      });
+      login(); // Call login without arguments
     } catch (err) {
       console.error("Login error:", err);
       setError(true);
