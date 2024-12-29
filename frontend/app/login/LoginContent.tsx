@@ -26,12 +26,9 @@ const SigupContentontent: React.FC = () => {
 
   const handleLogin = () => {
     try {
-      login({
-        disableSignup: false, // Allow only login 
-      });
+      login(); // Call login without arguments
     } catch (err) {
-      console.error("Login error:", err);
-      setError(true);
+      console.error('Login error:', err);
     }
   };
 
