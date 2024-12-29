@@ -16,15 +16,18 @@ export const wagmiConfig = createConfig({
 });
 
 const privyConfig: PrivyClientConfig = {
-  embeddedWallets: {
-    createOnLogin: 'users-without-wallets',
-    requireUserPasswordOnCreate: true,
-    noPromptOnSignature: false,
-  },
-  loginMethods: ['wallet', 'email', 'sms', 'google', ],
+  // embeddedWallets: {
+  //   createOnLogin: 'users-without-wallets',
+  //   requireUserPasswordOnCreate: true,
+  //   noPromptOnSignature: false,
+  // },
+  loginMethods: ['wallet', 'email', 'sms', 'google',],
   appearance: {
     showWalletLoginFirst: true,
+    theme: 'light',
+    accentColor: ''
   },
+  defaultChain: ''
 };
 
 export default function PrivyProviderContainer({children}: {children: React.ReactNode}) {
