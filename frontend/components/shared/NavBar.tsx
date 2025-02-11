@@ -22,7 +22,7 @@ const NavBar = () => {
                                 smooth={true}
                                 spy={true}
                                 duration={700}
-                                className={`capitalize font-DM text-color2 font-[450] text-[16px] cursor-pointer transition-all hover:text-strimzPrimary relative before:absolute before:w-0 before:h-[2px] before:rounded-2xl before:bg-color1 before:transition-all before:duration-300 hover:before:w-1/2 before:-bottom-[1px] before:left-[1px]`}
+                                className={`capitalize font-DM text-color4 font-[450] text-[16px] cursor-pointer transition-all hover:text-strimzPrimary relative before:absolute before:w-0 before:h-[2px] before:rounded-2xl before:bg-color1 before:transition-all before:duration-300 hover:before:w-1/2 before:-bottom-[1px] before:left-[1px]`}
                             >
                                 {link.name}
                             </Spy>

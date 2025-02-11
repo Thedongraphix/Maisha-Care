@@ -4,17 +4,22 @@ import { DNA } from 'react-loader-spinner'
 import { Button } from '../ui/button'
 import Image from 'next/image'
 import { motion } from "framer-motion";
+import { Button as Spy } from "react-scroll";
 
 const HeroSection = () => {
     return (
-        <main className="w-full lg:min-h-[100dvh] md:h-[600px] h-[580px] bg-white overflow-x-hidden flex flex-col justify-start items-center relative">
+        <main className="w-full lg:min-h-[100dvh] md:h-[600px] h-auto bg-white overflow-x-hidden flex flex-col justify-start items-center relative">
             <section className='lg:w-[55%] w-full px-4 flex flex-col items-center md:pt-16 pt-10'>
                 <h1 className='text-center font-poppins font-bold md:text-5xl text-4xl text-color2'>Maisha Care: Empowering You with Decentralized Healthcare Records</h1>
                 <p className='text-center font-DM text-lg font-[500] tracking-wide md:tracking-widest md:mt-1 mt-2 mb-6 text-color4/70 '>Your Health, Your Data, Your Control.
                 </p>
                 <div className="flex justify-center items-center gap-4">
                     <Button className='bg-color1 w-[130px] h-[40px] text-white hover:bg-color2'>Get Started</Button>
-                    <Button variant={'outline'} className='bg-white w-[130px] h-[40px] border-color1 text-color1 hover:bg-color1 hover:text-white'>Learn More</Button>
+                    <Spy
+                        to="howItWorks"
+                        smooth={true}
+                        spy={true}
+                        duration={700} className='bg-white border w-[130px] h-[40px] border-color1 text-color1 rounded-md hover:bg-color1 hover:text-white'>Learn More</Spy>
                 </div>
                 <div className="md:block hidden">
                     <DNA
