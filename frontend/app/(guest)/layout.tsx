@@ -1,3 +1,7 @@
+import MaxWrapper from "@/components/shared/MaxWrapper";
+import NavBar from "@/components/shared/NavBar";
+import ScrollToTopBtn from "@/components/shared/ScrollToTopBtn";
+
 export default function GuestLayout({
     children,
 }: Readonly<{
@@ -5,12 +9,14 @@ export default function GuestLayout({
 }>) {
     return (
         <section className="w-full">
-            {/* <NavBar /> */}
-            <main className="w-full">
-                {children}
-            </main>
-            {/* <ScrollToTopBtn />
-            <Footer /> */}
+            <MaxWrapper>
+                <NavBar />
+                <main className="w-full">
+                    {children}
+                </main>
+                <ScrollToTopBtn />
+                {/* <Footer /> */}
+            </MaxWrapper>
         </section>
     );
 }

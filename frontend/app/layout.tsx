@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import "@/styles/globals.css";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Maisha Care",
   description: "Maisha Care is a Web3-powered healthcare platform that leverages AI and blockchain to provide secure, decentralized medical services. It offers real-time patient monitoring, AI-driven insights, and seamless data management with a futuristic and user-friendly interface.",
+  icons: {
+    icon: "/favicon.ico",
+  }
 };
 
 export default function RootLayout({
@@ -14,9 +18,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`w-full min-h-screen antialiased bg-color4`}
+        className={`w-full min-h-screen antialiased bg-white`}
       >
         {children}
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );
