@@ -1,25 +1,9 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
-import "./globals.css";
-import "@/styles/style.css";
-import "@rainbow-me/rainbowkit/styles.css";
-import PrivyProviderContainer from "@/components/providers/privy-provider";
-
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
+import "@/styles/globals.css";
 
 export const metadata: Metadata = {
   title: "Maisha Care",
-  description: "Health Onchain",
+  description: "Maisha Care is a Web3-powered healthcare platform that leverages AI and blockchain to provide secure, decentralized medical services. It offers real-time patient monitoring, AI-driven insights, and seamless data management with a futuristic and user-friendly interface.",
 };
 
 export default function RootLayout({
@@ -28,11 +12,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body suppressHydrationWarning={true} className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <PrivyProviderContainer>
-          {children}
-        </PrivyProviderContainer>
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`w-full min-h-screen antialiased bg-color4`}
+      >
+        {children}
       </body>
     </html>
   );
