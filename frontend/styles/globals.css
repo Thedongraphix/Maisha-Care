@@ -80,3 +80,11 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+svg.dna-wrapper circle:nth-child(odd) {
+  fill: #1B1F3A !important;
+}
+
+svg.dna-wrapper circle:nth-child(even) {
+  fill: #A35377 !important;
+}

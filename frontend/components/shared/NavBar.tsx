@@ -10,7 +10,7 @@ const NavBar = () => {
 
         <header className='w-full flex justify-center items-center'>
 
-            <nav className='lg:w-[60%] md:w-[80%] w-[95%]  h-[64px] flex justify-between items-center md:mt-[20px] mt-[12px] border border-[#DBCAD4]/50 shadow-navbarShadow rounded-[20px] px-4'>
+            <nav className='lg:w-[65%] md:w-full w-[95%]  h-[64px] flex justify-between items-center md:mt-[20px] mt-[12px] border border-[#DBCAD4]/50 shadow-navbarShadow rounded-[20px] px-4'>
 
                 <Logo href='/' classname='w-[50px]' />
                 <div className='hidden md:flex gap-[24px] font-poppins items-center'>
