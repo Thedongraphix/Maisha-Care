@@ -5,16 +5,16 @@ export type navLinksTypes = {
 
 export const navlinks: navLinksTypes[] = [
     {
+        name: "About",
+        to: "about"
+    },
+    {
         name: "How it Works",
         to: "howItWorks",
     },
     {
         name: "Features",
         to: "features",
-    },
-    {
-        name: "Why Maisha-Care",
-        to: "whyMaishaCare",
     },
     {
         name: "FAQs",

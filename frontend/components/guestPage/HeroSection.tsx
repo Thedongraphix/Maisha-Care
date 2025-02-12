@@ -16,7 +16,7 @@ const HeroSection = () => {
                 <div className="flex justify-center items-center gap-4">
                     <Button className='bg-color1 w-[130px] h-[40px] text-white hover:bg-color2'>Get Started</Button>
                     <Spy
-                        to="howItWorks"
+                        to="about"
                         smooth={true}
                         spy={true}
                         duration={700} className='bg-white border w-[130px] h-[40px] border-color1 text-color1 rounded-md hover:bg-color1 hover:text-white'>Learn More</Spy>
