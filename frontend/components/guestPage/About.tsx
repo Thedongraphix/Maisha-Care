@@ -6,7 +6,7 @@ import Image from 'next/image'
 
 const About = () => {
     return (
-        <Element name="about" className='w-full bg-color2'>
+        <Element name="about" className='w-full bg-color4'>
             <main className="w-full md:h-[500px] grid md:grid-cols-2">
                 <section className="relative flex h-[350px] md:h-full w-full flex-col items-center justify-center overflow-hidden bg-transparent">
                     <div className="z-10 w-[120px]">

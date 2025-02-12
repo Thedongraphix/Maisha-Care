@@ -5,7 +5,7 @@ import { ShieldCheck, Globe, UserCheck } from "lucide-react";
 
 const Features = () => {
     return (
-        <Element name="features" className='w-full bg-neutral-200 md:py-28 py-20'>
+        <Element name="features" className='w-full bg-white md:py-28 py-20'>
             <section className='max-w-6xl mx-auto md:px-8 px-4 flex flex-col items-center'>
                 <div className='flex flex-col items-center mb-4'>
                     <h1 className="text-color4 font-poppins font-semibold md:text-4xl text-3xl">Key Features</h1>

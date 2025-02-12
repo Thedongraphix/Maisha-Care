@@ -10,7 +10,7 @@ const HeroSection = () => {
     return (
         <main className="w-full lg:min-h-[100dvh] md:h-[600px] h-auto bg-white overflow-x-hidden flex flex-col justify-start items-center relative">
             <section className='lg:w-[55%] w-full px-4 flex flex-col items-center md:pt-16 pt-10'>
-                <h1 className='text-center font-poppins font-bold md:text-5xl text-4xl text-color2'>Maisha Care: Empowering You with Decentralized Healthcare Records</h1>
+                <h1 className='text-center font-poppins font-bold md:text-5xl text-4xl text-color4/90'>Maisha Care: Empowering You with Decentralized Healthcare Records</h1>
                 <p className='text-center font-DM text-lg font-[500] tracking-wide md:tracking-widest md:mt-1 mt-2 mb-6 text-color4/70 '>Your Health, Your Data, Your Control.
                 </p>
                 <div className="flex justify-center items-center gap-4">
