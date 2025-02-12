@@ -16,7 +16,7 @@ type Testimonial = {
 
 const Testimonials = () => {
     return (
-        <section className="w-full bg-white flex flex-col items-center md:py-28 py-20 relative">
+        <section className="w-full bg-white flex flex-col items-center md:py-28 py-20 relative px-4 md:px-0">
             <div className='flex flex-col items-center mb-8'>
                 <h1 className="text-color2 font-poppins font-semibold md:text-4xl text-3xl">Testimonials</h1>
                 <p className="md:text-lg text-base text-center font-DM font-medium text-color1">Hear from Those Who Trust Us</p>
@@ -55,7 +55,7 @@ const AnimatedTestimonials = () => {
 
     return (
         <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:gap-12 gap-8 max-w-5xl mx-auto">
                 <div className="relative h-80 w-full">
                     <AnimatePresence>
                         {testimonials.map((testimonial, index) => (
@@ -128,7 +128,7 @@ const AnimatedTestimonials = () => {
                             <p className="text-sm text-color1">
                                 {active.designation}
                             </p>
-                            <motion.p className="text-lg text-gray-500 mt-8">
+                            <motion.p className="text-lg text-gray-500 md:mt-8 mt-4">
                                 {active.quote.split(" ").map((word, index) => (
                                     <motion.span
                                         key={index}
@@ -155,7 +155,7 @@ const AnimatedTestimonials = () => {
                             </motion.p>
                         </motion.div>
                     </div>
-                    <div className="flex gap-6 pt-5">
+                    <div className="flex gap-6 md:pt-5 pt-3">
                         <Button className="h-8 bg-color1 hover:bg-color2  rounded" onClick={handleprev}>
                             <ArrowLeft />
                         </Button>
