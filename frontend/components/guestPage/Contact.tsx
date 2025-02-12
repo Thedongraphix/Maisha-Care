@@ -12,7 +12,7 @@ const Contact = () => {
         <section className="w-full bg-white flex flex-col items-center gap-8 md:py-28 py-20">
             <div className="w-full flex flex-col gap-1 items-center">
                 <h2 className='text-center text-color2 font-poppins font-bold md:text-4xl  text-3xl'>Contact Us</h2>
-                <h4 className="text-color1 font-medium font-DM md:text-lg text-base">Join Waitlist</h4>
+                <h4 className="text-color1 font-medium font-DM md:text-lg text-base">Get in Touch – We're Here to Help!</h4>
             </div>
             <div className="w-[90%] md:w-[60%] lg:w-[40%] p-4 md:p-8 border border-[#E5E7EB] rounded-[20px] shadow">
                 {/* form */}
@@ -51,6 +51,15 @@ const ContactForm = () => {
     ) => {
 
         setIsSending(true);
+
+        try {
+            console.log(values);
+            setIsSending(false);
+            resetForm();
+        } catch (error) {
+            console.log(error);
+        }
+
 
         // const promise = new Promise(async (resolve, reject) => {
 
