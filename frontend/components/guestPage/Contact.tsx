@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 import React, { useState } from 'react'
 import { CiMail, CiUser, CiEdit } from "react-icons/ci";
 import { Formik, Form, Field, ErrorMessage, FormikHelpers } from "formik";
 import * as Yup from "yup";
 import { AiOutlineLoading3Quarters } from "react-icons/ai";
-import { toast } from 'sonner';
 import ErrorDisplay from '../shared/ErrorMsg';
 
 const Contact = () => {
@@ -52,21 +52,21 @@ const ContactForm = () => {
 
         setIsSending(true);
 
-        const promise = new Promise(async (resolve, reject) => {
+        // const promise = new Promise(async (resolve, reject) => {
 
-            try {
-                console.log(values);
-            } catch (error) {
-                console.log(error);
-            }
+        //     try {
+        //         console.log(values);
+        //     } catch (error) {
+        //         console.log(error);
+        //     }
 
-        })
+        // })
 
 
-        promise.finally(() => {
-            setIsSending(false);
-            resetForm();
-        });
+        // promise.finally(() => {
+        //     setIsSending(false);
+        //     resetForm();
+        // });
 
     }
 
