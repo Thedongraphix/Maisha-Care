@@ -1,7 +1,9 @@
 'use client'
 import About from "@/components/guestPage/About";
+import Features from "@/components/guestPage/Features";
 import HeroSection from "@/components/guestPage/HeroSection";
 import HowItWorks from "@/components/guestPage/HowItWorks";
+import Testimonials from "@/components/guestPage/Testimonials";
 
 
 export default function Home() {
@@ -9,7 +11,9 @@ export default function Home() {
     <main className="w-full flex flex-col overflow-x-hidden">
       <HeroSection />
       <About />
+      <Features />
       <HowItWorks />
+      <Testimonials />
     </main>
   );
 }
