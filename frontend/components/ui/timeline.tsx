@@ -38,10 +38,10 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
       ref={containerRef}
     >
       <div className="max-w-7xl mx-auto py-20 px-4 md:px-8 lg:px-10">
-        <h2 className="text-lg md:text-4xl mb-4 font-bold font-poppins text-white max-w-4xl">
+        <h2 className="text-2xl md:text-4xl mb-4 font-bold font-poppins text-white max-w-4xl">
           How It Works
         </h2>
-        <p className="text-neutral-300 text-sm md:text-base max-w-sm">
+        <p className="text-color1 text-base max-w-sm">
           At Maisha-Care, we combine the power of Artificial Intelligence (AI) and blockchain technology to create a secure, transparent, and AI-driven healthcare experience.
         </p>
       </div>
@@ -56,7 +56,7 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
               <div className="h-10 absolute left-3 md:left-3 w-10 rounded-full bg-neutral-200 flex items-center justify-center">
                 <div className="h-4 w-4 rounded-full bg-color1 border border-neutral-300 p-2" />
               </div>
-              <h3 className="hidden md:block text-xl md:pl-20 md:text-5xl font-bold text-neutral-400  ">
+              <h3 className="hidden md:block text-xl md:pl-20 md:text-5xl font-bold text-color1  ">
                 {item.title}
               </h3>
             </div>
@@ -73,14 +73,14 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
           style={{
             height: height + "px",
           }}
-          className="absolute md:left-8 left-8 top-0 overflow-hidden w-[2px] bg-[linear-gradient(to_bottom,var(--tw-gradient-stops))] from-transparent from-[0%] via-neutral-200 to-transparent to-[99%] [mask-image:linear-gradient(to_bottom,transparent_0%,black_10%,black_90%,transparent_100%)] "
+          className="absolute md:left-8 left-8 top-0 overflow-hidden w-[3px] bg-[linear-gradient(to_bottom,var(--tw-gradient-stops))] from-transparent from-[0%] via-neutral-400 to-transparent to-[99%] [mask-image:linear-gradient(to_bottom,transparent_0%,black_10%,black_90%,transparent_100%)] "
         >
           <motion.div
             style={{
               height: heightTransform,
               opacity: opacityTransform,
             }}
-            className="absolute inset-x-0 top-0  w-[2px] bg-gradient-to-t from-color3 via-color1 to-transparent from-[0%] via-[10%] rounded-full"
+            className="absolute inset-x-0 top-0  w-[3px] bg-gradient-to-t from-color1 via-color1 to-transparent from-[0%] via-[10%] rounded-full"
           />
         </div>
       </div>

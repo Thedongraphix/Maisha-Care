@@ -1,5 +1,7 @@
 'use client'
 import About from "@/components/guestPage/About";
+import Contact from "@/components/guestPage/Contact";
+import FAQs from "@/components/guestPage/FAQs";
 import Features from "@/components/guestPage/Features";
 import HeroSection from "@/components/guestPage/HeroSection";
 import HowItWorks from "@/components/guestPage/HowItWorks";
@@ -14,6 +16,8 @@ export default function Home() {
       <Features />
       <HowItWorks />
       <Testimonials />
+      <FAQs />
+      <Contact />
     </main>
   );
 }

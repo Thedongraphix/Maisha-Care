@@ -1,3 +1,4 @@
+import Footer from "@/components/shared/Footer";
 import MaxWrapper from "@/components/shared/MaxWrapper";
 import NavBar from "@/components/shared/NavBar";
 import ScrollToTopBtn from "@/components/shared/ScrollToTopBtn";
@@ -15,7 +16,7 @@ export default function GuestLayout({
                     {children}
                 </main>
                 <ScrollToTopBtn />
-                {/* <Footer /> */}
+                <Footer />
             </MaxWrapper>
         </section>
     );
