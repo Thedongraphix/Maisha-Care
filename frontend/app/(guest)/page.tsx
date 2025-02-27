@@ -4,7 +4,7 @@ import FAQs from "@/components/guestPage/FAQs";
 import Features from "@/components/guestPage/Features";
 import HeroSection from "@/components/guestPage/HeroSection";
 import HowItWorks from "@/components/guestPage/HowItWorks";
-import Testimonials from "@/components/guestPage/Testimonials";
+
 
 
 export default function Home() {
@@ -14,7 +14,7 @@ export default function Home() {
       <About />
       <Features />
       <HowItWorks />
-      <Testimonials />
+      
       <FAQs />
      
     </main>
