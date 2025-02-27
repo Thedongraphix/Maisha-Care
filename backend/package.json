@@ -1,0 +1,41 @@
+{
+  "name": "maisha-care-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "jest",
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "start:anvil": "cross-env ACTIVE_NETWORK=anvil nodemon server.js",
+    "start:base-sepolia": "cross-env ACTIVE_NETWORK=baseSepolia nodemon server.js",
+    "start:prod:anvil": "cross-env ACTIVE_NETWORK=anvil node server.js",
+    "start:prod:base-sepolia": "cross-env ACTIVE_NETWORK=baseSepolia node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@0xpolygonid/js-sdk": "^1.18.3",
+    "@helia/json": "^3.0.6",
+    "@helia/unixfs": "^3.0.7",
+    "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.4",
+    "express": "^4.21.1",
+    "helia": "^4.2.5",
+    "multiformats": "^13.3.0",
+    "pinata-web3": "^0.5.1",
+    "viem": "^2.21.15"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.25.8",
+    "babel-jest": "^29.7.0",
+    "cross-env": "^7.0.3",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.0.0"
+  }
+}
