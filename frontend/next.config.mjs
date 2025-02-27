@@ -8,8 +8,12 @@ const nextConfig = {
       },
       {
         protocol: "https",
-        hostname: "images.pexels.com",
+        hostname: "images.unsplash.com",
       },
+      {
+        protocol: "https",
+        hostname: "images.pexels.com",
+      }
     ],
   },
 };

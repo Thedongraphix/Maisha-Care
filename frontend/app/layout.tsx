@@ -1,6 +1,21 @@
-import type { Metadata } from "next";
+    import type { Metadata } from "next";
 import "@/styles/globals.css";
 import { Toaster } from "sonner";
+import { Jost, Space_Grotesk } from 'next/font/google';
+
+const jost = Jost({
+  subsets: ['latin'],
+  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
+  variable: '--font-jost',
+  display: 'swap',
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-space-grotesk',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: "Maisha Care",
@@ -16,10 +31,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`w-full min-h-screen antialiased bg-white`}
-      >
+    <html lang="en" suppressHydrationWarning className={`${jost.variable} ${spaceGrotesk.variable}`}>
+      <body className="font-jost w-full min-h-screen antialiased bg-white">
         {children}
         <Toaster richColors position="top-right" />
       </body>

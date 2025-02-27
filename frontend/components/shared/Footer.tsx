@@ -18,7 +18,7 @@ const Footer = () => {
                 <Logo href='/' classname=' md:w-[60px] w-[60px]' />
 
                 <div className='flex items-center gap-4'>
-                    <Link href="/" target='_blank' className='text-neutral-400 transition hover:text-neutral-200'>
+                    <Link href="/https://x.com/_maishacare" target='_blank' className='text-neutral-400 transition hover:text-neutral-200'>
                         <FaXTwitter className='w-6 h-6' />
                     </Link>
                     <Link href="/" target='_blank' className='text-neutral-400 transition hover:text-neutral-200'>

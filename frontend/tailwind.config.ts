@@ -63,6 +63,8 @@ const config: Config = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		fontFamily: {
+  			jost: ['Jost', 'sans-serif'],
+  			grotesk: ['Space Grotesk', 'sans-serif'],
   			poppins: [
   				'Poppins',
   				'sans-serif'

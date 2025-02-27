@@ -4,13 +4,58 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --font-jost: 'Jost', sans-serif;
+  --font-space-grotesk: 'Space Grotesk', sans-serif;
+}
+
+/* Remove the DM Sans import since we're not using it */
+@layer base {
+  /* Set default font family */
+  html {
+    font-family: var(--font-jost);
+  }
+  
+  /* Ensure all elements inherit the font */
+  *, *::before, *::after {
+    font-family: inherit;
+  }
+
+  /* Set Space Grotesk for headings */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-space-grotesk);
+  }
+
+  /* Explicitly set Jost for interactive elements */
+  button, 
+  input, 
+  select, 
+  textarea,
+  a,
+  p,
+  span,
+  div,
+  li {
+    font-family: var(--font-jost);
+  }
+}
+
+/* Remove conflicting body font-family */
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  @apply bg-background text-foreground;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .font-jost {
+    font-family: var(--font-jost) !important;
+  }
+
+  .font-grotesk {
+    font-family: var(--font-space-grotesk) !important;
   }
 }
 
@@ -87,4 +132,28 @@ svg.dna-wrapper circle:nth-child(odd) {
 
 svg.dna-wrapper circle:nth-child(even) {
   fill: #A35377 !important;
+}
+
+/* Custom component styles */
+@layer components {
+  .btn {
+    @apply font-jost;
+  }
+  
+  .nav-link {
+    @apply font-jost;
+  }
+
+  /* Add more specific component styles if needed */
+  .input-field {
+    @apply font-jost;
+  }
+
+  .card-text {
+    @apply font-jost;
+  }
+
+  .heading-text {
+    @apply font-grotesk;
+  }
 }
