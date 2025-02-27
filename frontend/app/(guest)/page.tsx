@@ -14,7 +14,6 @@ export default function Home() {
       <About />
       <Features />
       <HowItWorks />
-      
       <FAQs />
      
     </main>
