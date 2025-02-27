@@ -1,13 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  webpack: (config) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-    };
-    return config;
+  images: {
+    domains: ['images.unsplash.com', 'i.pinimg.com', 'images.pexels.com'],
+    /**remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
+      }
+    ],
+    */
   },
 };
 
-module.exports = nextConfig; 
+module.exports = nextConfig;
