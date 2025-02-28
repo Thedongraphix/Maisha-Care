@@ -8,7 +8,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const HowItWorks = () => {
     return (
-        <Element name="howItWorks" className='w-full lg:px-28 px-4 bg-white py-16'>
+<Element 
+            name="howItWorks" 
+            className='w-full lg:px-28 px-4 bg-white py-16 rounded-[60px] md:rounded-[120px] lg:rounded-[160px]'>
             <div className="text-center mb-12">
                 <h2 className="text-3xl md:text-4xl font-bold text-color4 mb-4">How It Works</h2>
                 <p className="text-color1 max-w-2xl mx-auto">
