@@ -1,5 +1,5 @@
 // WhatsApp Configuration
-const phoneNumber = "254797872622" // Replace with your actual phone number
+const phoneNumber = "254743931827" // Replace with your actual phone number
 const message = encodeURIComponent("Hello Maisha Care, I would like to get an AI consultation.")
 
 // WhatsApp link with pre-filled message

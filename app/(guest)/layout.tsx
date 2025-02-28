@@ -2,6 +2,7 @@ import Footer from "@/components/shared/Footer";
 import MaxWrapper from "@/components/shared/MaxWrapper";
 import NavBar from "@/components/shared/NavBar";
 import ScrollToTopBtn from "@/components/shared/ScrollToTopBtn";
+import FloatingWhatsApp from "@/components/shared/FloatingWhatsApp";
 
 export default function GuestLayout({
     children,
@@ -16,6 +17,8 @@ export default function GuestLayout({
                     {children}
                 </main>
                 <ScrollToTopBtn />
+                <FloatingWhatsApp />
+                
                 <Footer />
             </MaxWrapper>
         </section>

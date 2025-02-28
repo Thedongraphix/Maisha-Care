@@ -29,14 +29,7 @@ const HeroSection = () => {
                     >
                         Join the E-Doc waiting list
                     </Link>
-                    <Link 
-                    href={whatsappLink}
-                    target='_blank'
-                    rel="noopener noreferrer"
-                    className='bg=green-500 px-4 h-[40px] rounded-md flex justify-center items-center text-white hover:bg-green-600 transition-colors'
-                   >
-                    Contact on WhatsApp
-                   </Link>
+                    
                 </div>
                 <div className="md:block hidden">
                     <DNA
