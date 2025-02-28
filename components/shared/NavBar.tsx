@@ -38,7 +38,12 @@ const NavBar = () => {
                     ))}
                 </div>
                 <div className='flex items-center gap-[24px]'>
-                   
+                    {/*<Link
+                        href="/login"
+                        className='md:w-[130px] w-[110px] h-[40px] flex justify-center items-center bg-color1 rounded-[8px] border-none cursor-pointer text-[14px] font-[500] font-jost text-white hover:bg-color2 transition-colors'
+                    >
+                        Login
+                    </Link> */}
                     <div className="md:hidden flex items-center">
                         <MobileNav />
                     </div>
