@@ -16,21 +16,20 @@ const HeroSection = () => {
                 <p className='text-center text-lg font-[500] tracking-wide md:mt-1 mt-2 mb-6 text-color4/70'>
                     Complete consultations in under 10 minutes and a secure onchain health profile at your fingertips.
                 </p>
-                <div className="flex md:flex-row flex-col justify-center items-center gap-4">
-                    <Link 
-                        href="/patients" 
-                        className='bg-color1 px-4 rounded-md flex justify-center items-center h-[40px] text-white hover:bg-color2 transition-colors'
-                    >
-                        Get AI Consultation Now
-                    </Link>
-                    <Link 
-                        href="/doctors" 
-                        className='bg-white border px-4 h-[40px] border-color1 text-color1 rounded-md hover:bg-color1 hover:text-white transition-colors flex items-center justify-center'
-                    >
-                        Join the E-Doc waiting list
-                    </Link>
-                    
-                </div>
+                <div className="flex md:flex-row flex-col justify-center items-center gap-6">
+    <Link 
+        href="/patients" 
+        className='bg-color1 px-8 rounded-xl flex justify-center items-center h-[50px] text-white hover:bg-color2 transition-colors text-lg font-medium w-[280px]'
+    >
+        Get AI Consultation Now
+    </Link>
+    <Link 
+        href="/doctors" 
+        className='bg-white border-2 px-8 h-[50px] border-color1 text-color1 rounded-xl hover:bg-color1 hover:text-white transition-colors flex items-center justify-center text-lg font-medium w-[280px]'
+    >
+        Join the E-Doc waiting list
+    </Link>
+</div>
                 <div className="md:block hidden">
                     <DNA
                         visible={true}
