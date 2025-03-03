@@ -20,7 +20,7 @@ const ConsultationHeader: React.FC<ConsultationHeaderProps> = ({ consultationTyp
       </div>
       <div className="bg-white/20 px-3 py-1 rounded-full text-sm flex items-center gap-1">
         <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-        AI Assistant: Dr. AI
+        AI Assistant: Dr. Maisha
       </div>
     </div>
   );
