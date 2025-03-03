@@ -1,6 +1,5 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
-import { CheckCircle } from 'lucide-react';
 import ConsultationHeader from '@/components/consultation/ConsultationHeader';
 import ProgressBar from '@/components/consultation/ProgressBar';
 import MessageList from '@/components/consultation/MessageList';
@@ -255,7 +254,7 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
         <button
           onClick={finalizeCase}
           disabled={progress < 3 || isFinalizing}
-          className={`w-full py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+          className={`w-full py-3 rounded-2xl font-medium transition-colors flex items-center justify-center gap-2 ${
             progress < 3 || isFinalizing
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
               : 'bg-gradient-to-r from-color1 to-color4 text-white hover:shadow-md'
@@ -268,7 +267,6 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
             </>
           ) : (
             <>
-              <CheckCircle className="w-5 h-5" />
               Finalize Consultation
             </>
           )}
