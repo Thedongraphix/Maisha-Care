@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Mic, CheckCircle } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import ConsultationHeader from '@/components/consultation/ConsultationHeader';
 import ProgressBar from '@/components/consultation/ProgressBar';
 import MessageList from '@/components/consultation/MessageList';

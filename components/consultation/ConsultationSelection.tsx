@@ -18,7 +18,7 @@ const ConsultationSelection: React.FC<ConsultationSelectionProps> = ({ onSelectM
           Choose Your Consultation Method
         </h2>
         <p className="text-gray-600 mb-8 max-w-lg mx-auto text-sm sm:text-base">
-          Select how you'd like to connect with our AI-powered healthcare system
+          Select how you&apos;d like to connect with our AI-powered healthcare system
         </p>
       </motion.div>
       

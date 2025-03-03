@@ -6,19 +6,7 @@ import Footer from '@/components/shared/Footer';
 import ConsultationModal from '@/components/consultation/ConsultationModal';
 import { motion } from 'framer-motion';
 
-// Types for consultation
-type Message = {
-  id: number;
-  text: string;
-  sender: 'user' | 'ai';
-  timestamp?: Date;
-};
 
-type UploadedFile = {
-  id: number;
-  name: string;
-  type: string;
-};
 
 export default function PatientsPage() {
   // State for consultation modal
@@ -29,7 +17,11 @@ export default function PatientsPage() {
   const closeConsultationModal = () => setShowConsultationModal(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-color1/5 to-white pt-24">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="min-h-screen bg-gradient-to-b from-color1/5 to-white pt-24"
+    >
       <NavBar />
       
       {/* Hero Section */}
@@ -281,6 +273,6 @@ export default function PatientsPage() {
       )}
       
       <Footer />
-    </div>
+    </motion.div>
   );
 }
