@@ -1,8 +1,33 @@
-import { Clock, MessageSquare, Stethoscope, ArrowRight,Shield, CheckCircle, User, Calendar, Bell, Activity, Heart, ChevronRight, Phone, DollarSign } from 'lucide-react';
+'use client';
+import { useState } from 'react';
+import { Clock, MessageSquare, Stethoscope, ArrowRight, Shield, CheckCircle, User, Calendar, Bell, Activity, Heart, ChevronRight, Phone, DollarSign } from 'lucide-react';
 import NavBar from '@/components/shared/NavBar';
 import Footer from '@/components/shared/Footer';
+import ConsultationModal from '@/components/consultation/ConsultationModal';
+import { motion } from 'framer-motion';
+
+// Types for consultation
+type Message = {
+  id: number;
+  text: string;
+  sender: 'user' | 'ai';
+  timestamp?: Date;
+};
+
+type UploadedFile = {
+  id: number;
+  name: string;
+  type: string;
+};
 
 export default function PatientsPage() {
+  // State for consultation modal
+  const [showConsultationModal, setShowConsultationModal] = useState(false);
+  
+  // Modal functions
+  const openConsultationModal = () => setShowConsultationModal(true);
+  const closeConsultationModal = () => setShowConsultationModal(false);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-color1/5 to-white pt-24">
       <NavBar />
@@ -22,8 +47,16 @@ export default function PatientsPage() {
                 Experience next-generation healthcare with AI-assisted diagnoses and instant access to qualified doctors.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <button className="bg-white text-color1 px-6 py-3 md:px-8 md:py-4 rounded-lg text-base md:text-lg font-semibold hover:bg-color1/10 transition-colors shadow-lg flex items-center justify-center gap-2 group">
-                  Get Started Now <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <button 
+                  onClick={openConsultationModal}
+                  className="bg-white text-color1 px-6 py-3 md:px-8 md:py-4 rounded-lg text-base md:text-lg font-semibold 
+                  hover:bg-color1 hover:text-white transition-all duration-300 shadow-lg 
+                  hover:shadow-color1/25 hover:shadow-2xl
+                  transform hover:-translate-y-1
+                  flex items-center justify-center gap-2 group"
+                >
+                  Get Started Now 
+                  <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-2" />
                 </button>
                 <button className="bg-white/10 backdrop-blur-sm border border-white/30 text-white rounded-lg px-6 py-3 md:px-8 md:py-4 text-base md:text-lg font-medium flex items-center justify-center">
                   How It Works
@@ -53,7 +86,10 @@ export default function PatientsPage() {
                     <div className="text-sm text-gray-500">Online now</div>
                   </div>
                 </div>
-                <button className="w-full bg-color1 text-white py-2 rounded-lg font-medium hover:bg-color1/90 transition-colors">
+                <button 
+                  onClick={openConsultationModal}
+                  className="w-full bg-color1 text-white py-2 rounded-lg font-medium hover:bg-color1/90 transition-colors"
+                >
                   Connect Now
                 </button>
               </div>
@@ -184,68 +220,25 @@ export default function PatientsPage() {
         </div>
       </section>
 
-      {/* Testimonials Section
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h2 className="text-3xl font-bold text-center mb-12">What Our Patients Say</h2>
-        
-        <div className="grid md:grid-cols-3 gap-6 mb-16">
-          {[
-            {
-              quote: "Maisha Care saved me when I needed urgent medical advice at 2 AM. The doctor was professional and solved my issue in minutes.",
-              name: "James Kimani",
-              location: "Nairobi"
-            },
-            {
-              quote: "I love how I can access my complete medical history anytime. The blockchain technology makes me feel secure about my sensitive data.",
-              name: "Sarah Ochieng",
-              location: "Mombasa"
-            },
-            {
-              quote: "As someone living in a rural area, getting quick access to doctors used to be impossible. Maisha Care changed everything for me.",
-              name: "David Mwangi",
-              location: "Nakuru"
-            }
-          ].map((testimonial, index) => (
-            <div key={index} className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
-              <div className="flex mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-5 h-5 text-color3" fill="#FBBF24" />
-                ))}
+      {/* Statistics Section */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 mb-10 flex justify-center items-center">
+        <div className="w-full max-w-5xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 justify-items-center">
+            {[
+              { number: "2", label: "Consultation Fee", icon: DollarSign },
+              { number: "8 min", label: "Average Consultation", icon: Clock },
+              { number: "24/7", label: "Service Availability", icon: Calendar }
+            ].map((stat, index) => (
+              <div key={index} className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow text-center">
+                <stat.icon className="w-10 h-10 text-color1 mx-auto mb-3" />
+                <h3 className="text-3xl font-bold text-gray-900 mb-1">{stat.number}</h3>
+                <p className="text-gray-600">{stat.label}</p>
               </div>
-              <p className="text-gray-700 mb-6 italic">"{testimonial.quote}"</p>
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-color1/10 rounded-full flex items-center justify-center text-color1 font-bold mr-4">
-                  {testimonial.name.split(' ').map(n => n[0]).join('')}
-                </div>
-                <div>
-                  <p className="font-semibold">{testimonial.name}</p>
-                  <p className="text-gray-600 text-sm">{testimonial.location}</p>
-                </div>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
-     */}
-      {/* Statistics Section */}
-      
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 mb-10 flex justify-center items-center">
-      <div className="w-full max-w-5xl">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 justify-items-center">
-          {[
-            { number: "2", label: "Consultation Fee", icon: DollarSign },
-            { number: "8 min", label: "Average Consultation", icon: Clock },
-            { number: "24/7", label: "Service Availability", icon: Calendar }
-          ].map((stat, index) => (
-            <div key={index} className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow text-center">
-              <stat.icon className="w-10 h-10 text-color1 mx-auto mb-3" />
-              <h3 className="text-3xl font-bold text-gray-900 mb-1">{stat.number}</h3>
-              <p className="text-gray-600">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
+
       {/* CTA Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="bg-gradient-to-r from-color1 to-color1/80 rounded-3xl p-10 text-center text-white shadow-2xl relative overflow-hidden">
@@ -262,7 +255,10 @@ export default function PatientsPage() {
             </p>
             
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 max-w-xl mx-auto">
-              <button className="bg-white text-color1 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-color1/10 hover:text-white transition-colors shadow-lg flex-1 w-full flex items-center justify-center gap-2">
+              <button 
+                onClick={openConsultationModal}
+                className="bg-white text-color1 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-color1/10 hover:text-white transition-colors shadow-lg flex-1 w-full flex items-center justify-center gap-2"
+              >
                 <Phone className="w-5 h-5" />
                 Get Started Now
               </button>
@@ -278,6 +274,12 @@ export default function PatientsPage() {
           </div>
         </div>
       </section>
+      
+      {/* Consultation Modal */}
+      {showConsultationModal && (
+        <ConsultationModal onClose={closeConsultationModal} />
+      )}
+      
       <Footer />
     </div>
   );
