@@ -21,7 +21,7 @@ const HeroSection = () => {
         href="/patients" 
         className='bg-color1 px-8 rounded-xl flex justify-center items-center h-[50px] text-white hover:bg-color2 transition-colors text-lg font-medium w-[280px]'
     >
-        Get AI Consultation Now
+        Get Consultation Now
     </Link>
     <Link 
         href="/doctors" 
