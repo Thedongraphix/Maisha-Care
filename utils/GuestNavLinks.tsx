@@ -27,6 +27,12 @@ export const navlinks: navLinksTypes[] = [
         isScroll: true
     },
     {
+        name: "Consultation",
+        to: "consultation",
+        isScroll: false,
+        href: "/consultation"
+    },
+    {
         name: "Doctors",
         to: "doctors",
         isScroll: false,

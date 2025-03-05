@@ -18,7 +18,7 @@ const HeroSection = () => {
                 </p>
                 <div className="flex md:flex-row flex-col justify-center items-center gap-6">
     <Link 
-        href="/patients" 
+        href="/consultation" 
         className='bg-color1 px-8 rounded-xl flex justify-center items-center h-[50px] text-white hover:bg-color2 transition-colors text-lg font-medium w-[280px]'
     >
         Get Consultation Now

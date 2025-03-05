@@ -47,9 +47,8 @@ const ConsultationModal: React.FC<ConsultationModalProps> = ({ onClose }) => {
         >
           <X className="w-5 h-5" />
         </button>
-
         {!activeConsultation ? (
-          <ConsultationSelection onSelectMethod={startConsultation} />
+          <ConsultationSelection onSelect={startConsultation} />
         ) : (
           <ActiveConsultation 
             consultationType={activeConsultation} 

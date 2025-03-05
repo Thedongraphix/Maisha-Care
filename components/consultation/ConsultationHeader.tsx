@@ -1,11 +1,12 @@
 import React from 'react';
-import { MessageSquare, Mic } from 'lucide-react';
+import { MessageSquare, Mic, X } from 'lucide-react';
 
 interface ConsultationHeaderProps {
   consultationType: string;
+  onClose: () => void;
 }
 
-const ConsultationHeader: React.FC<ConsultationHeaderProps> = ({ consultationType }) => {
+const ConsultationHeader: React.FC<ConsultationHeaderProps> = ({ consultationType, onClose }) => {
   return (
     <div className="bg-gradient-to-r from-color1 to-color4 text-white p-4 flex items-center">
       <div className="flex-1 flex items-center gap-2">
@@ -22,6 +23,13 @@ const ConsultationHeader: React.FC<ConsultationHeaderProps> = ({ consultationTyp
         <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
         AI Assistant: Dr. Maisha
       </div>
+      <button 
+        onClick={onClose}
+        className="ml-2 p-1 rounded-full hover:bg-white/20 transition-colors"
+        aria-label="Close consultation"
+      >
+        <X className="w-5 h-5" />
+      </button>
     </div>
   );
 };

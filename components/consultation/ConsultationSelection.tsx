@@ -3,10 +3,10 @@ import { MessageSquare, Mic } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface ConsultationSelectionProps {
-  onSelectMethod: (type: string) => void;
+  onSelect: (type: string) => void;
 }
 
-const ConsultationSelection: React.FC<ConsultationSelectionProps> = ({ onSelectMethod }) => {
+const ConsultationSelection: React.FC<ConsultationSelectionProps> = ({ onSelect }) => {
   return (
     <div className="min-h-[100dvh] sm:min-h-0 p-4 sm:p-8 pt-16 sm:pt-8 flex flex-col justify-center">
       <motion.div
@@ -24,7 +24,7 @@ const ConsultationSelection: React.FC<ConsultationSelectionProps> = ({ onSelectM
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 max-w-2xl mx-auto w-full">
         <motion.button 
-          onClick={() => onSelectMethod('text')}
+          onClick={() => onSelect('text')}
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
@@ -45,7 +45,7 @@ const ConsultationSelection: React.FC<ConsultationSelectionProps> = ({ onSelectM
         </motion.button>
         
         <motion.button 
-          onClick={() => onSelectMethod('voice')}
+          onClick={() => onSelect('voice')}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}

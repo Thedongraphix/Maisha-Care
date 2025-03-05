@@ -11,6 +11,7 @@ const nextConfig = {
     ],
     */
   },
+  // Remove rewrites as we're handling proxying in our API route
 };
 
 module.exports = nextConfig;

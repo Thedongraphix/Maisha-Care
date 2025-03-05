@@ -38,7 +38,7 @@ const About: React.FC = () => {
                     </p>
                     <div className="flex flex-col md:items-end items-start gap-3">
                     
-                        <Link href="/patients">
+                        <Link href="/consultation">
                             <Button 
                                 className='bg-color1 w-[150px] h-[45px] text-white hover:bg-white hover:text-color1 border border-color1 
                                 font-medium tracking-wide transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg'

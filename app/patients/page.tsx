@@ -1,20 +1,19 @@
 'use client';
-import { useState } from 'react';
-import { Clock, MessageSquare, Stethoscope, ArrowRight, Shield, CheckCircle, User, Calendar, Bell, Activity, Heart, ChevronRight, Phone, DollarSign } from 'lucide-react';
+import { Clock, MessageSquare, Stethoscope, ArrowRight, Shield, CheckCircle, User, Calendar, Bell, Activity, Heart, ChevronRight, DollarSign } from 'lucide-react';
 import NavBar from '@/components/shared/NavBar';
 import Footer from '@/components/shared/Footer';
-import ConsultationModal from '@/components/consultation/ConsultationModal';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 
 
 
 export default function PatientsPage() {
-  // State for consultation modal
-  const [showConsultationModal, setShowConsultationModal] = useState(false);
+  const router = useRouter();
   
-  // Modal functions
-  const openConsultationModal = () => setShowConsultationModal(true);
-  const closeConsultationModal = () => setShowConsultationModal(false);
+  // Function to navigate to consultation page
+  const navigateToConsultation = () => {
+    router.push('/consultation');
+  };
 
   return (
     <motion.div 
@@ -38,22 +37,12 @@ export default function PatientsPage() {
               <p className="text-lg md:text-xl text-white/90 mb-8 max-w-lg">
                 Experience next-generation healthcare with AI-assisted diagnoses and instant access to qualified doctors.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <button 
-                  onClick={openConsultationModal}
-                  className="bg-white text-color1 px-6 py-3 md:px-8 md:py-4 rounded-lg text-base md:text-lg font-semibold 
-                  hover:bg-color1 hover:text-white transition-all duration-300 shadow-lg 
-                  hover:shadow-color1/25 hover:shadow-2xl
-                  transform hover:-translate-y-1
-                  flex items-center justify-center gap-2 group"
-                >
-                  Get Started Now 
-                  <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-2" />
-                </button>
-                <button className="bg-white/10 backdrop-blur-sm border border-white/30 text-white rounded-lg px-6 py-3 md:px-8 md:py-4 text-base md:text-lg font-medium flex items-center justify-center">
-                  How It Works
-                </button>
-              </div>
+              <button 
+                onClick={navigateToConsultation}
+                className="inline-flex items-center px-6 py-3 bg-white text-color1 rounded-full font-medium hover:bg-gray-100 transition-colors"
+              >
+                Start Consultation <ArrowRight className="ml-2 w-4 h-4" />
+              </button>
             </div>
             <div className="md:w-2/5 bg-color1/90 p-6 md:p-0 flex items-center justify-center relative">
               <div className="absolute inset-0 opacity-20">
@@ -78,8 +67,17 @@ export default function PatientsPage() {
                     <div className="text-sm text-gray-500">Online now</div>
                   </div>
                 </div>
+                <div>
+                  <p className="text-gray-600 mb-1">Need immediate care?</p>
+                  <button 
+                    onClick={navigateToConsultation}
+                    className="inline-flex items-center text-color1 font-medium"
+                  >
+                    Start AI Consultation <ArrowRight className="ml-1 w-4 h-4" />
+                  </button>
+                </div>
                 <button 
-                  onClick={openConsultationModal}
+                  onClick={navigateToConsultation}
                   className="w-full bg-color1 text-white py-2 rounded-lg font-medium hover:bg-color1/90 transition-colors"
                 >
                   Connect Now
@@ -248,11 +246,11 @@ export default function PatientsPage() {
             
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 max-w-xl mx-auto">
               <button 
-                onClick={openConsultationModal}
-                className="bg-white text-color1 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-color1/10 hover:text-white transition-colors shadow-lg flex-1 w-full flex items-center justify-center gap-2"
+                onClick={navigateToConsultation}
+                className="bg-color1 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-color1/90 transition-colors shadow-lg flex-1 w-full flex items-center justify-center gap-2"
               >
-                <Phone className="w-5 h-5" />
-                Get Started Now
+                <MessageSquare className="mr-2 h-5 w-5" />
+                Start AI Consultation
               </button>
               <button className="bg-transparent border border-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-white/10 transition-colors w-full flex-1 text-white">
                 Learn More
@@ -266,11 +264,6 @@ export default function PatientsPage() {
           </div>
         </div>
       </section>
-      
-      {/* Consultation Modal */}
-      {showConsultationModal && (
-        <ConsultationModal onClose={closeConsultationModal} />
-      )}
       
       <Footer />
     </motion.div>
