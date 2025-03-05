@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cleanup": "node scripts/cleanup.js",
+    "postbuild": "npm run cleanup"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
