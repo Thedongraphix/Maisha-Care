@@ -19,7 +19,7 @@ const spaceGrotesk = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: "Maisha Care",
-  description: "Maisha Care is a Web3-powered healthcare platform that leverages AI and blockchain to provide secure, decentralized medical services. It offers real-time patient monitoring, AI-driven insights, and seamless data management with a futuristic and user-friendly interface.",
+  description: "Maisha Care is a Web3-powered healthcare platform that leverages AI and blockchain to provide secure, decentralized medical service's. It offers real-time patient monitoring, AI-driven insights, and seamless data management with a futuristic and user-friendly interface.",
   icons: {
     icon: "/favicon.ico",
   }
