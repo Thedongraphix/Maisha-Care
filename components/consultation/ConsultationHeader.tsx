@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Mic, X } from 'lucide-react';
+import { MessageSquare, Mic, X, User, Shield } from 'lucide-react';
 
 interface ConsultationHeaderProps {
   consultationType: string;
@@ -8,24 +8,35 @@ interface ConsultationHeaderProps {
 
 const ConsultationHeader: React.FC<ConsultationHeaderProps> = ({ consultationType, onClose }) => {
   return (
-    <div className="bg-gradient-to-r from-color1 to-color4 text-white p-4 flex items-center">
-      <div className="flex-1 flex items-center gap-2">
-        {consultationType === 'text' ? (
-          <MessageSquare className="w-5 h-5" />
-        ) : (
-          <Mic className="w-5 h-5" />
-        )}
-        <h3 className="font-semibold">
-          {consultationType === 'text' ? 'Text Consultation' : 'Voice Consultation'}
-        </h3>
+    <div className="bg-white border-b border-gray-200 p-3 sm:p-4 flex justify-between items-center shadow-sm">
+      <div className="flex items-center">
+        <div className="w-10 h-10 rounded-full bg-color1/10 text-color1 flex items-center justify-center mr-3">
+          <User className="w-5 h-5" />
+        </div>
+        <div>
+          <h3 className="font-semibold text-gray-800">Dr. Stacy</h3>
+          <div className="flex items-center text-xs text-gray-500">
+            <Shield className="w-3 h-3 mr-1" />
+            <span>AI Medical Assistant</span>
+            <span className="mx-2">•</span>
+            {consultationType === 'text' ? (
+              <div className="flex items-center">
+                <MessageSquare className="w-3 h-3 mr-1 text-color1" />
+                <span>Text Consultation</span>
+              </div>
+            ) : (
+              <div className="flex items-center">
+                <Mic className="w-3 h-3 mr-1 text-color1" />
+                <span>Voice Consultation</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="bg-white/20 px-3 py-1 rounded-full text-sm flex items-center gap-1">
-        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-        AI Assistant: Dr. Maisha
-      </div>
-      <button 
+      
+      <button
         onClick={onClose}
-        className="ml-2 p-1 rounded-full hover:bg-white/20 transition-colors"
+        className="bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 rounded-full p-2 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-color1/30"
         aria-label="Close consultation"
       >
         <X className="w-5 h-5" />

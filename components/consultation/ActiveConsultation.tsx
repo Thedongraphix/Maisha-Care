@@ -1,7 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
 import ConsultationHeader from '@/components/consultation/ConsultationHeader';
-import ProgressBar from '@/components/consultation/ProgressBar';
 import MessageList from '@/components/consultation/MessageList';
 import VoiceConsultation from '@/components/consultation/VoiceConsultation';
 import InputArea from '@/components/consultation/InputArea';
@@ -53,7 +52,7 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
   
   // Update state definition with the proper type
   const [conversationHistory, setConversationHistory] = useState<Array<{role: MessageRole, content: string}>>([
-    { role: 'assistant' as MessageRole, content: "Hello! I'm Dr. AI. Please describe your symptoms so I can help you today." }
+    { role: 'assistant' as MessageRole, content: "Hello! I'm Dr. Stacy. Please describe your symptoms so I can help you today." }
   ]);
   
   // Refs
@@ -518,46 +517,47 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
   // };
 
   return (
-    <div className="flex flex-col h-full relative">
-      <ConsultationHeader onClose={onClose} consultationType={consultationType} />
-      <ProgressBar progress={progress} />
-      <div className="flex-1 p-3 sm:p-4 overflow-y-auto bg-white/60 backdrop-blur-md">
-        {consultationType === 'text' ? (
-          <MessageList 
-            messages={messages} 
-            messagesEndRef={messagesEndRef} 
-            uploadedFiles={uploadedFiles}
-            removeFile={removeFile}
-            isSubmitting={isSubmitting}
-          />
-        ) : (
-          <VoiceConsultation 
-            isRecording={isRecording}
-            messages={messages}
-          />
-        )}
-      </div>
-      
-      <div className="mb-4 flex justify-center">
-      
-      </div>
-      
-      <InputArea 
+    <div className="flex flex-col h-full">
+      <ConsultationHeader 
         consultationType={consultationType}
-        inputText={inputText}
-        setInputText={setInputText}
-        sendMessage={sendMessage}
-        handleKeyPress={handleKeyPress}
-        toggleRecording={toggleRecording}
-        isRecording={isRecording}
-        handleFileUpload={handleFileInputChange}
-        fileInputRef={fileInputRef}
-        isSubmitting={isSubmitting}
-        isFinalizing={isFinalizing}
+        onClose={onClose}
       />
       
+      <div className="flex-1 overflow-hidden flex flex-col bg-gray-50 relative">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {consultationType === 'text' ? (
+            <MessageList 
+              messages={messages} 
+              messagesEndRef={messagesEndRef} 
+              uploadedFiles={uploadedFiles}
+              removeFile={removeFile}
+              isSubmitting={isSubmitting}
+            />
+          ) : (
+            <VoiceConsultation 
+              isRecording={isRecording}
+              messages={messages}
+            />
+          )}
+        </div>
+      
+        <InputArea 
+          consultationType={consultationType}
+          inputText={inputText}
+          setInputText={setInputText}
+          sendMessage={sendMessage}
+          handleKeyPress={handleKeyPress}
+          toggleRecording={toggleRecording}
+          isRecording={isRecording}
+          handleFileUpload={handleFileInputChange}
+          fileInputRef={fileInputRef}
+          isSubmitting={isSubmitting}
+          isFinalizing={isFinalizing}
+        />
+      </div>
+      
       {/* Finalize button */}
-      <div className="border-t border-gray-200 p-4 bg-white">
+      <div className="border-t border-gray-200 p-4 bg-white shadow-sm">
         <button
           onClick={finalizeCase}
           disabled={progress < 3 || isFinalizing}

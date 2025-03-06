@@ -1,5 +1,5 @@
 import React from 'react';
-import { Paperclip, Send, Mic } from 'lucide-react';
+import { Paperclip, Send, Mic, Image } from 'lucide-react';
 
 interface InputAreaProps {
   consultationType: string;
@@ -28,59 +28,81 @@ const InputArea: React.FC<InputAreaProps> = ({
   isSubmitting,
   isFinalizing
 }) => {
+  const isDisabled = isSubmitting || isFinalizing;
+  
   return (
-    <div className="border-t border-gray-100 p-3 sm:p-4 bg-white">
+    <div className="border-t border-gray-200 p-3 sm:p-4 bg-white shadow-sm">
       {consultationType === 'text' ? (
         <div className="flex items-center gap-2">
-          <label className="cursor-pointer text-gray-500 hover:text-color1 transition-colors p-2">
-            <Paperclip className="w-5 h-5" />
-            <input 
-              type="file" 
-              className="hidden" 
-              onChange={handleFileUpload}
-              ref={fileInputRef}
-              multiple
+          <div className="flex gap-2">
+            <label className="cursor-pointer text-gray-400 hover:text-color1 transition-colors p-2 rounded-full hover:bg-gray-100">
+              <Paperclip className="w-5 h-5" />
+              <input 
+                type="file" 
+                className="hidden" 
+                onChange={handleFileUpload}
+                ref={fileInputRef}
+                multiple
+                disabled={isDisabled}
+              />
+            </label>
+            <label className="cursor-pointer text-gray-400 hover:text-color1 transition-colors p-2 rounded-full hover:bg-gray-100" aria-label="Upload image">
+              {/* This is a Lucide icon, not an HTML img element */}
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
+              <Image className="w-5 h-5" />
+              <input 
+                type="file" 
+                className="hidden" 
+                onChange={handleFileUpload}
+                accept="image/*"
+                disabled={isDisabled}
+              />
+            </label>
+          </div>
+          
+          <div className="flex-1 relative bg-gray-50 rounded-full overflow-hidden border border-gray-200 focus-within:border-color1 focus-within:ring-2 focus-within:ring-color1/20 transition-all">
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="Message Dr. Stacy..."
+              className="w-full px-4 py-2.5 bg-transparent text-gray-800 
+                text-sm sm:text-base focus:outline-none placeholder:text-gray-400"
+              onKeyDown={handleKeyPress}
+              disabled={isDisabled}
             />
-          </label>
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1 border border-gray-200 rounded-full px-4 py-2.5 
-            text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-color1/30 
-            focus:border-transparent placeholder:text-gray-400"
-            onKeyDown={handleKeyPress}
-            disabled={isSubmitting || isFinalizing}
-          />
-          <button 
-            onClick={sendMessage}
-            disabled={!inputText.trim() || isSubmitting || isFinalizing}
-            className={`bg-color1 text-white p-2.5 rounded-full 
-            hover:bg-color1/90 transition-all duration-300 
-            disabled:opacity-50 disabled:cursor-not-allowed
-            hover:shadow-lg hover:shadow-color1/25 ${
-              !inputText.trim() || isSubmitting || isFinalizing ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            <Send className="w-5 h-5" />
-          </button>
+            
+            <button 
+              onClick={sendMessage}
+              disabled={!inputText.trim() || isDisabled}
+              className={`absolute right-1 top-1/2 -translate-y-1/2 bg-color1 text-white p-2 rounded-full 
+                hover:bg-color1/90 transition-all duration-150 
+                hover:shadow-md ${
+                !inputText.trim() || isDisabled ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       ) : (
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center px-4 py-6">
           <button
             onClick={toggleRecording}
-            disabled={isSubmitting || isFinalizing}
+            disabled={isDisabled}
             className={`${
-              isRecording ? 'bg-red-500' : 'bg-color1'
-            } text-white p-4 rounded-full 
+              isRecording 
+                ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
+                : 'bg-color1 hover:bg-color1/90'
+            } text-white p-5 rounded-full 
             hover:shadow-lg transition-all duration-300 
-            disabled:opacity-50 disabled:cursor-not-allowed ${
-              isSubmitting || isFinalizing ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
+            disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            <Mic className="w-6 h-6" />
+            <Mic className="w-7 h-7" />
           </button>
+          <p className="mt-3 text-sm text-gray-500 font-medium">
+            {isRecording ? 'Recording... Tap to stop' : 'Tap to start recording'}
+          </p>
         </div>
       )}
     </div>

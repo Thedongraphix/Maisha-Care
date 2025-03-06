@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { sendMessageToAPI } from '@/services/chatService';
+import { resetChatState } from '@/utils/consultationUtils';
 
 export default function SimpleChat() {
   const [messages, setMessages] = useState<Array<{
@@ -11,7 +12,7 @@ export default function SimpleChat() {
   }>>([
     {
       id: 1,
-      text: "Hello! I'm the Maisha Care AI assistant. How can I help you today?",
+      text: "Hello! I'm Dr. Stacy, your Maisha Care AI assistant. How can I help you today?",
       sender: 'assistant'
     }
   ]);
@@ -91,11 +92,38 @@ export default function SimpleChat() {
     }
   };
   
+  // Function to handle starting a new chat
+  const handleResetChat = () => {
+    // Clear consultation ID from localStorage
+    resetChatState();
+    
+    // Reset the chat UI
+    setMessages([
+      {
+        id: Date.now(),
+        text: "Hello! I'm Dr. Stacy, your Maisha Care AI assistant. How can I help you today?",
+        sender: 'assistant'
+      }
+    ]);
+    
+    // Reset the input
+    setInputMessage('');
+    setIsLoading(false);
+  };
+  
   return (
     <div className="flex flex-col h-[600px] w-full max-w-2xl bg-white rounded-lg shadow-md overflow-hidden">
-      <div className="bg-blue-600 text-white p-4">
-        <h2 className="text-xl font-bold">Maisha Care Chat</h2>
-        <p className="text-sm">Simple chat interface</p>
+      <div className="bg-blue-600 text-white p-4 flex justify-between items-center">
+        <div>
+          <h2 className="text-xl font-bold">Maisha Care Chat</h2>
+          <p className="text-sm">Simple chat interface</p>
+        </div>
+        <button 
+          onClick={handleResetChat}
+          className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-full text-sm transition-colors"
+        >
+          New Chat
+        </button>
       </div>
       
       {/* Messages container */}
