@@ -65,7 +65,7 @@ const InputArea: React.FC<InputAreaProps> = ({
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Message Dr. Stacy..."
+              placeholder="Message Stacy..."
               className="w-full px-4 py-2.5 bg-transparent text-gray-800 
                 text-sm sm:text-base focus:outline-none placeholder:text-gray-400"
               onKeyDown={handleKeyPress}
