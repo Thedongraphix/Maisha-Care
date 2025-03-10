@@ -73,7 +73,7 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
   const [conversationHistory, setConversationHistory] = useState<Array<{role: MessageRole, content: string}>>([
     { 
       role: 'assistant' as MessageRole, 
-      content: "Hello! I'm Dr. AI. Please start by providing your name, age, and gender. Then tell me about your symptoms - what's bothering you, where is the pain or discomfort located, when did it start, and how severe is it on a scale of 1-10?" 
+      content: "Hello! I'm Stacy Please start by providing your name, age, and gender. Then tell me about your symptoms - what's bothering you, where is the pain or discomfort located, when did it start, and how severe is it on a scale of 1-10?" 
     }
   ]);
   
