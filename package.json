@@ -8,12 +8,15 @@
     "start": "next start",
     "lint": "next lint",
     "cleanup": "node scripts/cleanup.js",
-    "postbuild": "npm run cleanup"
+    "postbuild": "npm run cleanup",
+    "build:production": "cross-env NODE_ENV=production next build",
+    "start:production": "cross-env NODE_ENV=production next start -p 3000"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-dialog": "^1.1.6",
     "@radix-ui/react-slot": "^1.1.2",
+    "@types/uuid": "^10.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "formik": "^2.4.6",
@@ -28,6 +31,7 @@
     "sonner": "^1.7.4",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
+    "uuid": "^11.1.0",
     "yup": "^1.6.1"
   },
   "devDependencies": {
@@ -35,6 +39,8 @@
     "@types/react": "^18",
     "@types/react-dom": "^18.3.5",
     "@types/react-scroll": "^1.8.10",
+    "critters": "^0.0.25",
+    "cross-env": "^7.0.3",
     "eslint": "^8",
     "eslint-config-next": "14.2.17",
     "postcss": "^8",

@@ -3,6 +3,7 @@ import React, { ReactNode } from 'react';
 import { LogOut, User } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import ErrorBoundary from '../../../components/ErrorBoundary';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -39,7 +40,9 @@ export default function DoctorsDashboardLayout({ children }: DashboardLayoutProp
       </nav>
       <main className="pt-16 pb-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </div>
       </main>
     </div>
