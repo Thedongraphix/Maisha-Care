@@ -57,7 +57,7 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
   const [messages, setMessages] = useState<Message[]>([
     { 
       id: 1, 
-      text: "Hello! I'm Dr. AI. Please start by providing your name, age, and gender. Then tell me about your symptoms - what's bothering you, where is the pain or discomfort located, when did it start, and how severe is it on a scale of 1-10?", 
+      text: "Hello, I'm Stacy, your virtual health assistant. How are you feeling today? Feel free to share what's bothering you, and I'm here to help.", 
       sender: 'ai', 
       timestamp: createEATDate() 
     }
@@ -73,7 +73,7 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
   const [conversationHistory, setConversationHistory] = useState<Array<{role: MessageRole, content: string}>>([
     { 
       role: 'assistant' as MessageRole, 
-      content: "Hello! I'm Stacy Please start by providing your name, age, and gender. Then tell me about your symptoms - what's bothering you, where is the pain or discomfort located, when did it start, and how severe is it on a scale of 1-10?" 
+      content: "Hello, I'm Stacy, your virtual health assistant. How are you feeling today? Feel free to share what's bothering you, and I'm here to help." 
     }
   ]);
   
@@ -159,20 +159,6 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
     } catch (error) {
       console.error('API Connection Error:', error);
     }
-  };
-
-  // Fallback response when API is not available
-  const sendFallbackMessage = () => {
-    const fallbackResponses = [
-      "I understand you're not feeling well. Could you provide more details about your symptoms?",
-      "Thank you for sharing. Based on your description, you might want to consult with a healthcare professional.",
-      "I'm analyzing your symptoms. It would help if you could tell me how long you've been experiencing them.",
-    ];
-    
-    const randomIndex = Math.floor(Math.random() * fallbackResponses.length);
-    return {
-      message: fallbackResponses[randomIndex]
-    };
   };
 
   // Updated message handling function to use our improved chat service
@@ -274,74 +260,151 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
         checkFinalizationReadiness();
       }, 500);
       
-      // After sending the first message, if the system doesn't detect a name introduction,
-      // prompt the user to provide their name if they haven't already
-      if (messages.length === 2 && !inputText.toLowerCase().includes('name') && !inputText.toLowerCase().includes('i am') && !inputText.toLowerCase().includes("i'm")) {
+      // Improved conversational flow with gentle prompts for missing information
+      const allUserText = messages
+        .filter(m => m.sender === 'user')
+        .map(m => m.text.toLowerCase())
+        .join(' ');
+      
+      // First exchange - if very short response and no name
+      if (messages.length === 2 && inputText.length < 50 && 
+          !inputText.toLowerCase().includes('name') && 
+          !inputText.toLowerCase().includes('i am') && 
+          !inputText.toLowerCase().includes("i'm")) {
         setTimeout(() => {
           setMessages(prevMessages => [
             ...prevMessages,
             { 
               id: Date.now(), 
-              text: "To provide better service, could you please share your name with me?", 
+              text: "I understand. To help you better, could you share your name with me? It helps to personalize our conversation.", 
               sender: 'ai', 
               timestamp: createEATDate() 
+            }
+          ]);
+          
+          setConversationHistory(prev => [
+            ...prev,
+            { 
+              role: 'assistant' as MessageRole, 
+              content: "I understand. To help you better, could you share your name with me? It helps to personalize our conversation." 
             }
           ]);
         }, 1000);
       }
 
-      // Add prompts for critical missing information after a few messages
-      if (messages.length === 5) { // After a couple of exchanges
+      // After 3 user messages, gently ask for any critical missing info in a conversational way
+      if (messages.filter(m => m.sender === 'user').length === 3) {
         // Use explicit type for missingInfo array
-        const missingInfo: string[] = [];
+        const missingInfo: Array<{type: string, prompt: string}> = [];
         
-        // Extract information from messages so far
-        const allUserText = messages
-          .filter(m => m.sender === 'user')
-          .map(m => m.text.toLowerCase())
-          .join(' ');
-        
-        // Check for key information
-        if (!allUserText.match(/\b(my name is|i am|i'm|call me)\b/i)) {
-          missingInfo.push("your name");
+        // Check for key information but with more specific, friendly prompts
+        if (!allUserText.match(/\b(my name is|i am|i'm|call me)\b/i) && !allUserText.match(/\b[A-Z][a-z]{2,}\b/)) {
+          missingInfo.push({
+            type: "name",
+            prompt: "I'd love to know your name so I can address you properly"
+          });
         }
         
         if (!allUserText.match(/\b(\d+\s*(years?|yrs?|y\.?o\.?)|age)\b/i)) {
-          missingInfo.push("your age");
+          missingInfo.push({
+            type: "age",
+            prompt: "may I ask how old you are"
+          });
         }
         
         if (!allUserText.match(/\b(male|female|man|woman|boy|girl)\b/i)) {
-          missingInfo.push("your gender");
+          missingInfo.push({
+            type: "gender",
+            prompt: "it would help to know your gender"
+          });
         }
+        
+        // Less aggressive about symptom details in early conversation
+        const needsSymptomDetails = !allUserText.match(/\b(pain|hurt|ache|feel|symptom|problem)\b/i);
+        
+        // Only prompt for basics first, maximum 2 items
+        if (missingInfo.length > 0) {
+          setTimeout(() => {
+            // Choose just one piece of information to ask for
+            const infoToAsk = missingInfo[0];
+            
+            let message = "";
+            
+            // If no symptoms mentioned at all, focus on main issue
+            if (needsSymptomDetails) {
+              message = "Thanks for sharing. Could you tell me a bit more about what symptoms you're experiencing?";
+            }
+            // Otherwise ask for personal details
+            else if (infoToAsk) {
+              message = `Thank you for explaining. By the way, ${infoToAsk.prompt}? This helps me provide better care.`;
+            }
+            
+            if (message) {
+              setMessages(prevMessages => [
+                ...prevMessages,
+                { 
+                  id: Date.now(), 
+                  text: message, 
+                  sender: 'ai', 
+                  timestamp: createEATDate() 
+                }
+              ]);
+              
+              setConversationHistory(prev => [
+                ...prev,
+                { 
+                  role: 'assistant' as MessageRole, 
+                  content: message 
+                }
+              ]);
+            }
+          }, 1500);
+        }
+      }
+
+      // After 5 messages, check for more specific clinical details with empathy
+      if (messages.filter(m => m.sender === 'user').length === 5) {
+        const clinicalMissingInfo: Array<{type: string, prompt: string}> = [];
         
         if (!allUserText.match(/\b(start|began|since|for|ago|day|week|month)\b/i)) {
-          missingInfo.push("when your symptoms started");
-        }
-        
-        if (!allUserText.match(/\b(pain|hurt|ache)\s+(in|on|my)\s+\w+/i)) {
-          missingInfo.push("where the symptoms are located");
+          clinicalMissingInfo.push({
+            type: "onset",
+            prompt: "when did you first notice these symptoms"
+          });
         }
         
         if (!allUserText.match(/\b(severe|severity|scale|rate|\/10|out of 10)\b/i)) {
-          missingInfo.push("how severe your symptoms are on a scale of 1-10");
+          clinicalMissingInfo.push({
+            type: "severity",
+            prompt: "on a scale of 1-10, how would you rate the intensity of what you're feeling"
+          });
         }
         
-        // If we're missing critical information, prompt for it
-        if (missingInfo.length > 0) {
+        if (clinicalMissingInfo.length > 0) {
           setTimeout(() => {
-            // Limit to asking about at most 2 things at once
-            const itemsToAsk = missingInfo.slice(0, 2);
-            const infoPrompt = itemsToAsk.join(" and ");
+            const infoToAsk = clinicalMissingInfo[0];
             
-            setMessages(prevMessages => [
-              ...prevMessages,
-              { 
-                id: Date.now(), 
-                text: `To help with my assessment, could you please tell me ${infoPrompt}?`, 
-                sender: 'ai', 
-                timestamp: createEATDate() 
-              }
-            ]);
+            if (infoToAsk) {
+              const message = `I appreciate you sharing this with me. To better understand your situation, may I ask ${infoToAsk.prompt}?`;
+              
+              setMessages(prevMessages => [
+                ...prevMessages,
+                { 
+                  id: Date.now(), 
+                  text: message, 
+                  sender: 'ai', 
+                  timestamp: createEATDate() 
+                }
+              ]);
+              
+              setConversationHistory(prev => [
+                ...prev,
+                { 
+                  role: 'assistant' as MessageRole, 
+                  content: message 
+                }
+              ]);
+            }
           }, 1500);
         }
       }
@@ -515,12 +578,12 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
       const analysisResults = await analyzeResponse.json();
       console.log('Analysis complete:', analysisResults);
       
-      // Add a final message
+      // Add a final message - more personalized and warm
       setMessages(prevMessages => [
         ...prevMessages,
         { 
           id: Date.now(), 
-          text: "Your consultation has been analyzed and sent to a doctor for review. Thank you for using Maisha Care!", 
+          text: "Thank you for sharing your health concerns with me today. I've sent your information to our medical team who will review your case. A doctor will provide personalized advice soon. Please take care of yourself in the meantime.", 
           sender: 'ai', 
           timestamp: createEATDate() 
         }
@@ -540,7 +603,7 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
         ...prevMessages,
         { 
           id: Date.now(), 
-          text: "There was an error finalizing your consultation. Please try again.", 
+          text: "I'm sorry, we encountered an issue while processing your consultation. Please try again or contact our support team if the problem persists.", 
           sender: 'ai', 
           timestamp: createEATDate() 
         }
@@ -919,6 +982,22 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
   //     ]);
   //   }
   // };
+
+  // Helper function to create more empathetic fallback responses
+  const sendFallbackMessage = () => {
+    const fallbackResponses = [
+      "I'm listening. Can you tell me more about how you're feeling?",
+      "Thank you for sharing that. Could you provide a bit more detail so I can better understand?",
+      "I appreciate you explaining. Is there anything else about your symptoms that you'd like to share?",
+      "I understand this might be difficult to discuss. Take your time, and share what you feel comfortable with.",
+      "Thank you for trusting me with this information. How has this been affecting your daily life?",
+    ];
+    
+    const randomIndex = Math.floor(Math.random() * fallbackResponses.length);
+    return {
+      message: fallbackResponses[randomIndex]
+    };
+  };
 
   return (
     <div className="flex flex-col h-full">
