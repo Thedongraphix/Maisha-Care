@@ -42,6 +42,6 @@ export const navlinks: navLinksTypes[] = [
         name: "Patients",
         to: "patients",
         isScroll: false,
-        href: "/patient"
+        href: "/patients"
     },
 ]
