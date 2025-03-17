@@ -461,24 +461,7 @@ export default function PatientsPage() {
               transition={{ duration: 0.5, delay: 0.5 }}
               className="flex flex-col md:flex-row items-center justify-center gap-4 mt-8"
             >
-              <div className="flex items-center justify-center gap-2">
-                <div className="bg-white/20 p-1 rounded-full">
-                  <CheckCircle className="w-5 h-5 text-green-300" />
-                </div>
-                <span className="text-white">No waiting rooms</span>
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <div className="bg-white/20 p-1 rounded-full">
-                  <CheckCircle className="w-5 h-5 text-green-300" />
-                </div>
-                <span className="text-white">No appointments</span>
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <div className="bg-white/20 p-1 rounded-full">
-                  <CheckCircle className="w-5 h-5 text-green-300" />
-                </div>
-                <span className="text-white">Start in seconds</span>
-              </div>
+            
             </motion.div>
           </div>
         </motion.div>
