@@ -1,8 +1,8 @@
 'use client';
 import React, { ReactNode } from 'react';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, Home, FileText, Users, Settings } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import ErrorBoundary from '../../../components/ErrorBoundary';
 
 interface DashboardLayoutProps {
@@ -11,10 +11,27 @@ interface DashboardLayoutProps {
 
 export default function DoctorsDashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleLogout = () => {
     // Handle logout logic here
     router.push('/doctors');
+  };
+
+  // Navigation links for the doctor's dashboard
+  const navLinks = [
+    { name: 'Dashboard', href: '/doctors/dashboard', icon: Home },
+    { name: 'Cases', href: '/doctors/dashboard', icon: FileText },
+    { name: 'Patients', href: '/doctors/dashboard/patients', icon: Users },
+    { name: 'Settings', href: '/doctors/dashboard/settings', icon: Settings },
+  ];
+
+  // Check if a link is active
+  const isActive = (path: string) => {
+    if (path === '/doctors/dashboard' && pathname === '/doctors/dashboard') {
+      return true;
+    }
+    return pathname.startsWith(path) && path !== '/doctors/dashboard';
   };
 
   return (
@@ -24,7 +41,28 @@ export default function DoctorsDashboardLayout({ children }: DashboardLayoutProp
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <span className="text-xl font-bold text-color1">Maisha Care</span>
+                <Link href="/doctors/dashboard" className="text-xl font-bold text-color1">
+                  Maisha Care
+                </Link>
+              </div>
+              {/* Desktop navigation */}
+              <div className="hidden md:block ml-10">
+                <div className="flex space-x-4">
+                  {navLinks.map((link) => (
+                    <Link
+                      key={link.name}
+                      href={link.href}
+                      className={`px-3 py-2 rounded-md text-sm font-medium flex items-center ${
+                        isActive(link.href)
+                          ? 'bg-color1/10 text-color1'
+                          : 'text-gray-600 hover:bg-gray-100 hover:text-color1'
+                      }`}
+                    >
+                      <link.icon className="h-4 w-4 mr-2" />
+                      {link.name}
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="flex items-center">
