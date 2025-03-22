@@ -3,6 +3,12 @@ export type navLinksTypes = {
     to: string;
     isScroll?: boolean;
     href?: string;
+    hasDropdown?: boolean;
+    dropdownItems?: {
+        name: string;
+        href: string;
+        description?: string;
+    }[];
 }
 
 export const navlinks: navLinksTypes[] = [
@@ -31,11 +37,30 @@ export const navlinks: navLinksTypes[] = [
         to: "faqs",
         isScroll: true
     },
+    
     {
         name: "Patients",
         to: "patients",
         isScroll: false,
         href: "/patients"
+    },
+    {
+        name: "Resources",
+        to: "resources",
+        isScroll: false,
+        hasDropdown: true,
+        dropdownItems: [
+            {
+                name: "Documentation",
+                href: "/docs",
+                description: "Development guides and resources"
+            },
+            {
+                name: "API Reference",
+                href: "/api-reference",
+                description: "Complete API documentation"
+            }
+        ]
     },
     {
         name: "Doctors",
