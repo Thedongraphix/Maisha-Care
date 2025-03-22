@@ -26,7 +26,7 @@ export default function DoctorsPage() {
                   Apply Now <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </button>
                 <div className="bg-white/10 backdrop-blur-sm border border-white/30 text-white rounded-lg px-6 py-3 md:px-8 md:py-4 text-base md:text-lg font-medium flex items-center animate-pulse">
-                  <BellRing className="w-5 h-5 mr-2" /> Only 2 spots remaining
+                  <BellRing className="w-5 h-5 mr-2" /> Only 3 spots remaining
                 </div>
               </div>
             </div>
