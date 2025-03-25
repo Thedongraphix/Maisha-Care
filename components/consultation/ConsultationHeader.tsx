@@ -14,7 +14,7 @@ const ConsultationHeader: React.FC<ConsultationHeaderProps> = ({ consultationTyp
           <User className="w-5 h-5" />
         </div>
         <div>
-          <h3 className="font-semibold text-gray-800">Dr. Stacy</h3>
+          <h3 className="font-semibold text-gray-800">Stacy</h3>
           <div className="flex items-center text-xs text-gray-500">
             <Shield className="w-3 h-3 mr-1" />
             <span>AI Medical Assistant</span>
