@@ -122,24 +122,7 @@ const MessageList: React.FC<MessageListProps> = ({
             exit={{ opacity: 0, scale: 0.9 }}
             className="mr-auto bg-white border border-gray-200 rounded-2xl rounded-tl-sm p-4 shadow-sm max-w-[60%]"
           >
-            <div className="flex space-x-2">
-              <motion.div 
-                className="w-2 h-2 rounded-full bg-color1/40"
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ repeat: Infinity, duration: 1.5, delay: 0 }}
-              ></motion.div>
-              <motion.div 
-                className="w-2 h-2 rounded-full bg-color1/60"
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }}
-              ></motion.div>
-              <motion.div 
-                className="w-2 h-2 rounded-full bg-color1/80"
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }}
-              ></motion.div>
-            </div>
-            <div className="mt-1 ml-2 text-xs text-gray-500">Dr. Stacy is typing...</div>
+            <div className="text-sm text-gray-500">Dr. Stacy is typing...</div>
           </motion.div>
         )}
       </AnimatePresence>

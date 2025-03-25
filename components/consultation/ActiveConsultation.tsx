@@ -197,18 +197,6 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
     }
     
     try {
-      // Add thinking message
-      const thinkingId = Date.now() + 1;
-      setMessages(prevMessages => [
-        ...prevMessages,
-        { 
-          id: thinkingId, 
-          text: "Thinking...", 
-          sender: 'ai', 
-          timestamp: createEATDate() 
-        }
-      ]);
-      
       // Get existing consultation ID if available
       const consultationId = localStorage.getItem('maisha_consultation_id');
       
@@ -232,22 +220,16 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
         aiResponse = sendFallbackMessage();
       }
       
-      // Remove thinking message and add real response
-      setMessages(prevMessages => {
-        // Filter out thinking message
-        const filteredMessages = prevMessages.filter(msg => msg.id !== thinkingId);
-        
-        // Add AI response
-        return [
-          ...filteredMessages,
-          { 
-            id: Date.now() + 2, 
-            text: aiResponse.message, 
-            sender: 'ai', 
-            timestamp: createEATDate() 
-          }
-        ];
-      });
+      // Add AI response
+      setMessages(prevMessages => [
+        ...prevMessages,
+        { 
+          id: Date.now() + 2, 
+          text: aiResponse.message, 
+          sender: 'ai', 
+          timestamp: createEATDate() 
+        }
+      ]);
       
       // Update conversation history
       setConversationHistory([
@@ -260,154 +242,6 @@ const ActiveConsultation: React.FC<ActiveConsultationProps> = ({
         checkFinalizationReadiness();
       }, 500);
       
-      // Improved conversational flow with gentle prompts for missing information
-      const allUserText = messages
-        .filter(m => m.sender === 'user')
-        .map(m => m.text.toLowerCase())
-        .join(' ');
-      
-      // First exchange - if very short response and no name
-      if (messages.length === 2 && inputText.length < 50 && 
-          !inputText.toLowerCase().includes('name') && 
-          !inputText.toLowerCase().includes('i am') && 
-          !inputText.toLowerCase().includes("i'm")) {
-        setTimeout(() => {
-          setMessages(prevMessages => [
-            ...prevMessages,
-            { 
-              id: Date.now(), 
-              text: "I understand. To help you better, could you share your name with me? It helps to personalize our conversation.", 
-              sender: 'ai', 
-              timestamp: createEATDate() 
-            }
-          ]);
-          
-          setConversationHistory(prev => [
-            ...prev,
-            { 
-              role: 'assistant' as MessageRole, 
-              content: "I understand. To help you better, could you share your name with me? It helps to personalize our conversation." 
-            }
-          ]);
-        }, 1000);
-      }
-
-      // After 3 user messages, gently ask for any critical missing info in a conversational way
-      if (messages.filter(m => m.sender === 'user').length === 3) {
-        // Use explicit type for missingInfo array
-        const missingInfo: Array<{type: string, prompt: string}> = [];
-        
-        // Check for key information but with more specific, friendly prompts
-        if (!allUserText.match(/\b(my name is|i am|i'm|call me)\b/i) && !allUserText.match(/\b[A-Z][a-z]{2,}\b/)) {
-          missingInfo.push({
-            type: "name",
-            prompt: "I'd love to know your name so I can address you properly"
-          });
-        }
-        
-        if (!allUserText.match(/\b(\d+\s*(years?|yrs?|y\.?o\.?)|age)\b/i)) {
-          missingInfo.push({
-            type: "age",
-            prompt: "may I ask how old you are"
-          });
-        }
-        
-        if (!allUserText.match(/\b(male|female|man|woman|boy|girl)\b/i)) {
-          missingInfo.push({
-            type: "gender",
-            prompt: "it would help to know your gender"
-          });
-        }
-        
-        // Less aggressive about symptom details in early conversation
-        const needsSymptomDetails = !allUserText.match(/\b(pain|hurt|ache|feel|symptom|problem)\b/i);
-        
-        // Only prompt for basics first, maximum 2 items
-        if (missingInfo.length > 0) {
-          setTimeout(() => {
-            // Choose just one piece of information to ask for
-            const infoToAsk = missingInfo[0];
-            
-            let message = "";
-            
-            // If no symptoms mentioned at all, focus on main issue
-            if (needsSymptomDetails) {
-              message = "Thanks for sharing. Could you tell me a bit more about what symptoms you're experiencing?";
-            }
-            // Otherwise ask for personal details
-            else if (infoToAsk) {
-              message = `Thank you for explaining. By the way, ${infoToAsk.prompt}? This helps me provide better care.`;
-            }
-            
-            if (message) {
-              setMessages(prevMessages => [
-                ...prevMessages,
-                { 
-                  id: Date.now(), 
-                  text: message, 
-                  sender: 'ai', 
-                  timestamp: createEATDate() 
-                }
-              ]);
-              
-              setConversationHistory(prev => [
-                ...prev,
-                { 
-                  role: 'assistant' as MessageRole, 
-                  content: message 
-                }
-              ]);
-            }
-          }, 1500);
-        }
-      }
-
-      // After 5 messages, check for more specific clinical details with empathy
-      if (messages.filter(m => m.sender === 'user').length === 5) {
-        const clinicalMissingInfo: Array<{type: string, prompt: string}> = [];
-        
-        if (!allUserText.match(/\b(start|began|since|for|ago|day|week|month)\b/i)) {
-          clinicalMissingInfo.push({
-            type: "onset",
-            prompt: "when did you first notice these symptoms"
-          });
-        }
-        
-        if (!allUserText.match(/\b(severe|severity|scale|rate|\/10|out of 10)\b/i)) {
-          clinicalMissingInfo.push({
-            type: "severity",
-            prompt: "on a scale of 1-10, how would you rate the intensity of what you're feeling"
-          });
-        }
-        
-        if (clinicalMissingInfo.length > 0) {
-          setTimeout(() => {
-            const infoToAsk = clinicalMissingInfo[0];
-            
-            if (infoToAsk) {
-              const message = `I appreciate you sharing this with me. To better understand your situation, may I ask ${infoToAsk.prompt}?`;
-              
-              setMessages(prevMessages => [
-                ...prevMessages,
-                { 
-                  id: Date.now(), 
-                  text: message, 
-                  sender: 'ai', 
-                  timestamp: createEATDate() 
-                }
-              ]);
-              
-              setConversationHistory(prev => [
-                ...prev,
-                { 
-                  role: 'assistant' as MessageRole, 
-                  content: message 
-                }
-              ]);
-            }
-          }, 1500);
-        }
-      }
     } catch (error) {
       console.error('Error in message sending:', error);
       

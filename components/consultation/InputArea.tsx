@@ -31,7 +31,7 @@ const InputArea: React.FC<InputAreaProps> = ({
   const isDisabled = isSubmitting || isFinalizing;
   
   return (
-    <div className="border-t border-gray-200 p-3 sm:p-4 bg-white shadow-sm">
+    <div className="border-t border-gray-200 p-3 sm:p-4 bg-white shadow-sm sticky bottom-0 z-10">
       {consultationType === 'text' ? (
         <div className="flex items-center gap-2">
           <div className="flex gap-2">
