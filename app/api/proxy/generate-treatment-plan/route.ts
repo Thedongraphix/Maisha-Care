@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Configure maximum duration for this function (60 seconds for Pro plan)
+export const maxDuration = 60;
+
 // Mark this route as dynamic
 export const dynamic = 'force-dynamic';
 

@@ -9,6 +9,11 @@
     "NODE_ENV": "production",
     "NEXT_PUBLIC_API_BASE_URL": "https://v2deployment-production.up.railway.app"
   },
+  "functions": {
+    "app/api/**/*": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
