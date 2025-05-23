@@ -1,53 +1,64 @@
 'use client';
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import NavBar from '@/components/shared/NavBar';
-import Footer from '@/components/shared/Footer';
+// import { motion } from 'framer-motion'; // Removed as per user action
+// import NavBar from '@/components/shared/NavBar'; // Assuming not used here or in layout
+// import Footer from '@/components/shared/Footer'; // Assuming not used here or in layout
+import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 import ActiveConsultation from '@/components/consultation/ActiveConsultation';
-import ConsultationSelection from '@/components/consultation/ConsultationSelection';
 
 const ConsultationPage = () => {
-  const [activeConsultation, setActiveConsultation] = useState<string | null>(null);
-  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [activeConsultationType, setActiveConsultationType] = useState<'text' | 'voice' | null>(null);
+  const router = useRouter();
 
-  const startConsultation = (type: string) => {
-    setActiveConsultation(type);
+  const startConsultation = (type: 'text' | 'voice') => {
+    setActiveConsultationType(type);
   };
 
-  const closeConsultation = () => {
-    if (isFinalizing) return; // Prevent closing during finalization
-    
-    // Reset states after animation completes
-    setTimeout(() => {
-      setActiveConsultation(null);
-    }, 300);
+  const handleConsultationClose = () => {
+    setActiveConsultationType(null);
   };
+
+  if (!activeConsultationType) {
+    return (
+      <div className="flex flex-col items-center justify-center text-center p-10 bg-white shadow-xl rounded-lg min-h-[50vh]">
+        <h2 className="text-3xl font-semibold mb-6 text-slate-800 font-grotesk">Start Your AI Consultation</h2>
+        <p className="mb-8 text-slate-600 max-w-md">
+          Choose your preferred method to interact with our AI health assistant, Dr. Stacy.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 mb-8">
+          <Button 
+            onClick={() => startConsultation('text')} 
+            variant="default" 
+            size="lg" 
+            className="bg-indigo-600 hover:bg-indigo-700 px-8 py-6 text-lg"
+          >
+            Start Text Chat
+          </Button>
+          <Button 
+            onClick={() => startConsultation('voice')} 
+            variant="outline" 
+            size="lg"
+            className="px-8 py-6 text-lg border-indigo-600 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+          >
+            Start Voice Chat (Beta)
+          </Button>
+        </div>
+        <Button onClick={() => router.push('/')} variant="link" className="text-indigo-600 hover:text-indigo-800">
+          Back to Home
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="min-h-screen bg-gradient-to-b from-color1/5 to-white pt-24"
-    >
-      <NavBar />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-white sm:rounded-2xl shadow-lg overflow-hidden">
-          {!activeConsultation ? (
-            <ConsultationSelection onSelect={startConsultation} />
-          ) : (
-            <ActiveConsultation 
-              consultationType={activeConsultation}
-              onClose={closeConsultation}
-              setIsFinalizing={setIsFinalizing}
-              isFinalizing={isFinalizing}
-            />
-          )}
-        </div>
-      </div>
-      
-      <Footer />
-    </motion.div>
+    // Removed motion.div wrapper
+    <div className="w-full">
+      <ActiveConsultation 
+        consultationType={activeConsultationType}
+        onClose={handleConsultationClose}
+      />
+    </div>
   );
 };
 

@@ -1,191 +1,217 @@
 import logger from '@/utils/logger';
+import { API_BASE_URL } from '@/utils/constants';
 
-// Define the API URLs
-const API_PROXY = '/api/proxy';
-const DIRECT_API = 'https://ai-engine-production-487a.up.railway.app'; 
-
-// API response types
-export interface AIResponse {
+// API response types from integration.md
+export interface ChatResponse {
   consultation_id: string;
   message: string;
-  stage?: string;
+  stage: string;
   next_steps?: string;
 }
 
-// Extended response for file uploads
-export interface FileUploadResponse extends AIResponse {
-  fileUrl?: string;
-  file_url?: string;
+export interface WorkflowEvent {
+  consultation_id: string;
+  event_type: 'WORKFLOW_START' | 'WORKFLOW_PROGRESS' | 'WORKFLOW_COMPLETE' | 'WORKFLOW_ERROR';
+  workflow_name: string;
+  message: string;
+  timestamp: string;
 }
 
-/**
- * Send a message to the AI API
- * @param message - The user's message
- * @param consultationId - Optional consultation ID for continuing a conversation
- * @returns Promise<AIResponse> - The AI's response
- */
-export async function sendMessageToAPI(message: string, consultationId?: string | null): Promise<AIResponse> {
-  logger.debug('Sending message to API:', message);
-  logger.debug('Using consultation ID:', consultationId);
-  
-  // Create payload - initially try with the provided consultation ID
-  let payload = {
-    message,
-    consultation_id: consultationId
-  };
-  
-  // First try using the proxy
-  try {
-    logger.debug('Attempting to send message via proxy...');
-    
-    let response = await fetch(`${API_PROXY}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    logger.debug('Proxy response status:', response.status);
-    
-    // If we get a 404/500 specifically about consultation not found, retry without the ID
-    if (response.status === 500 || response.status === 404) {
-      const errorData = await response.json();
-      logger.warn('Error response:', errorData);
-      
-      // Check if it's a consultation not found error
-      if (
-        errorData.detail && 
-        (errorData.detail.includes('Consultation') || errorData.detail.includes('consultation')) && 
-        errorData.detail.includes('not found')
-      ) {
-        logger.info('Consultation not found, starting a new session');
-        
-        // Clear the stored consultation ID
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('maisha_consultation_id');
-        }
-        
-        // Create a new payload with the consultation_id set to null
-        payload = { 
-          message,
-          consultation_id: null 
-        };
-        
-        // Try again with the new payload
-        response = await fetch(`${API_PROXY}/chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload)
-        });
-        
-        logger.debug('New session response status:', response.status);
-      }
-    }
-    
-    if (response.ok) {
-      const data = await response.json();
-      logger.debug('Received response via proxy:', data);
-      return data;
-    } else {
-      logger.warn('Proxy request failed with status:', response.status);
-      throw new Error(`Proxy request failed with status: ${response.status}`);
-    }
-  } catch (proxyError) {
-    logger.error('Error with proxy request:', proxyError);
-    
-    // If proxy fails, try direct connection
-    logger.info('Trying direct connection...');
-    
-    try {
-      // For direct connection, use the latest payload (which may have removed the consultation_id if it was invalid)
-      const directResponse = await fetch(`${DIRECT_API}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      logger.debug('Direct API response status:', directResponse.status);
-      
-      if (directResponse.ok) {
-        const data = await directResponse.json();
-        logger.debug('Received response via direct connection:', data);
-        return data;
-      } else {
-        throw new Error(`Direct API request failed with status: ${directResponse.status}`);
-      }
-    } catch (directError) {
-      logger.error('Error with direct API request:', directError);
-      throw new Error('Failed to communicate with the AI service');
-    }
+export interface TestRequisitionData {
+  patient_name: string;
+  patient_age: number;
+  patient_sex: string;
+  requesting_physician: string;
+  date_requested: string;
+  tests_requested: string[];
+  clinical_notes?: string;
+  priority: 'Routine' | 'Urgent';
+}
+
+const getConsultationId = (): string | null => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('maisha_consultation_id');
   }
-}
+  return null;
+};
+
+const setConsultationId = (id: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('maisha_consultation_id', id);
+  }
+};
 
 /**
- * Upload a file to the AI API
- * @param file - The file to upload
- * @param consultationId - Optional consultation ID for continuing a conversation
- * @returns Promise<FileUploadResponse> - The AI's response including file information
+ * Send a message to the AI API (supports file uploads)
+ * @param messageText - The user's message text
+ * @param fileToUpload - Optional file to upload
+ * @returns Promise<ChatResponse> - The AI's response
  */
-export async function uploadFileToAPI(file: File, consultationId?: string | null): Promise<FileUploadResponse> {
-  logger.debug('Uploading file to API:', file.name);
+export async function sendMessage(messageText: string, fileToUpload?: File): Promise<ChatResponse> {
+  logger.debug('Sending message to API:', messageText, fileToUpload ? `with file: ${fileToUpload.name}` : '');
+  const consultationId = getConsultationId();
   logger.debug('Using consultation ID:', consultationId);
   
-  // Create form data
   const formData = new FormData();
-  formData.append('file', file);
-  
+  formData.append('message', messageText);
+
   if (consultationId) {
     formData.append('consultation_id', consultationId);
   }
-  
-  // First try using the proxy
+
+  if (fileToUpload) {
+    formData.append('file', fileToUpload);
+  }
+
   try {
-    logger.debug('Attempting to upload file via proxy...');
-    
-    const response = await fetch(`${API_PROXY}/upload`, {
+    const response = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
-      body: formData
+      body: formData,
+      // Do not set Content-Type header manually for FormData
     });
-    
-    logger.debug('Proxy upload response status:', response.status);
-    
-    if (response.ok) {
-      const data = await response.json();
-      logger.debug('Received upload response via proxy:', data);
-      return data;
-    } else {
-      logger.warn('Proxy upload request failed with status:', response.status);
-      throw new Error(`Proxy upload request failed with status: ${response.status}`);
-    }
-  } catch (proxyError) {
-    logger.error('Error with proxy upload request:', proxyError);
-    
-    // If proxy fails, try direct connection
-    logger.info('Trying direct upload connection...');
-    
-    try {
-      const directResponse = await fetch(`${DIRECT_API}/upload`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      logger.debug('Direct API upload response status:', directResponse.status);
-      
-      if (directResponse.ok) {
-        const data = await directResponse.json();
-        logger.debug('Received upload response via direct connection:', data);
-        return data;
-      } else {
-        throw new Error(`Direct API upload request failed with status: ${directResponse.status}`);
+
+    logger.debug('API response status:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: `HTTP error: ${response.status}` }));
+      // Attempt to clear consultation ID if it's a "not found" error, then rethrow for UI handling.
+      if (response.status === 404 && errorData.detail && errorData.detail.toLowerCase().includes('consultation not found')) {
+        logger.warn('Consultation not found on server. Clearing local ID.');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('maisha_consultation_id');
+        }
       }
-    } catch (directError) {
-      logger.error('Error with direct API upload request:', directError);
-      throw new Error('Failed to upload file to the AI service');
+      throw new Error(errorData.detail || `Error: ${response.status}`);
     }
+
+    const data: ChatResponse = await response.json();
+    logger.debug('Received response from API:', data);
+
+    if (data.consultation_id) {
+      setConsultationId(data.consultation_id);
+    }
+
+    return data;
+  } catch (error) {
+    logger.error('Error sending message to API:', error);
+    // Re-throw the error so the component can handle it (e.g., display to user)
+    throw error instanceof Error ? error : new Error('Failed to communicate with the AI service');
+  }
+}
+
+let eventSource: EventSource | null = null;
+let reconnectAttempt = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const BASE_RECONNECT_DELAY = 1000;
+const MAX_RECONNECT_DELAY = 30000;
+
+function getBackoffTime(): number {
+  if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    logger.error("SSE: Max reconnection attempts reached.");
+    return -1; // Indicate no more retries
+  }
+  const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempt), MAX_RECONNECT_DELAY);
+  reconnectAttempt++;
+  return delay;
+}
+
+function resetBackoff(): void {
+  reconnectAttempt = 0;
+}
+
+/**
+ * Connects to the Server-Sent Events stream for a consultation.
+ * @param onMessage - Callback function to handle incoming WorkflowEvent messages.
+ * @param onError - Optional callback function to handle SSE errors.
+ */
+export function connectToEventStream(
+  onMessage: (event: WorkflowEvent) => void,
+  onError?: (error: Event) => void
+): void {
+  const consultationId = getConsultationId();
+  if (!consultationId) {
+    logger.warn('SSE: No consultation ID, cannot connect.');
+    return;
+  }
+
+  if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
+    logger.warn('SSE: Connection already open or connecting.');
+    return;
+  }
+
+  logger.log(`SSE: Connecting to ${API_BASE_URL}/consultation/${consultationId}/events`);
+  eventSource = new EventSource(`${API_BASE_URL}/consultation/${consultationId}/events`);
+
+  eventSource.onopen = () => {
+    logger.log('SSE: Connection established.');
+    resetBackoff();
+  };
+
+  eventSource.onmessage = (event) => {
+    try {
+      const eventData: WorkflowEvent = JSON.parse(event.data);
+      logger.debug('SSE: Received event:', eventData);
+      onMessage(eventData); // Pass parsed data to the callback
+    } catch (error) {
+      logger.error('SSE: Error parsing event data:', error);
+    }
+  };
+
+  eventSource.onerror = (errorEvent) => {
+    logger.error('SSE: Connection error:', errorEvent);
+    eventSource?.close(); 
+    if (onError) {
+      onError(errorEvent);
+    }
+    const backoffTime = getBackoffTime();
+    if (backoffTime !== -1) {
+      logger.log(`SSE: Retrying connection in ${backoffTime / 1000}s...`);
+      setTimeout(() => connectToEventStream(onMessage, onError), backoffTime);
+      } else {
+        logger.error('SSE: Stopped retrying after max attempts.');
+    }
+  };
+}
+
+/**
+ * Disconnects from the Server-Sent Events stream.
+ */
+export function disconnectEventStream(): void {
+  if (eventSource) {
+    logger.log('SSE: Disconnecting...');
+    eventSource.close();
+    eventSource = null;
+    resetBackoff(); // Reset backoff attempts when explicitly disconnecting
+  }
+}
+
+/**
+ * Fetches test requisition data for the current consultation.
+ * @returns Promise<TestRequisitionData | null> - The requisition data or null if not found/error.
+ */
+export async function fetchRequisitionData(): Promise<TestRequisitionData | null> {
+  const consultationId = getConsultationId();
+  if (!consultationId) {
+    logger.warn('fetchRequisitionData: No active consultation ID.');
+    return null;
+  }
+
+  logger.debug('Fetching test requisition data for consultation ID:', consultationId);
+  try {
+    const response = await fetch(`${API_BASE_URL}/consultation/${consultationId}/requisition-data`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        logger.info('Test requisition data not yet available.');
+        return null;
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Error fetching requisition data: ${response.status}`);
+    }
+    const data: TestRequisitionData = await response.json();
+    logger.debug('Received requisition data:', data);
+    return data;
+  } catch (error) {
+    logger.error('Requisition data fetch error:', error);
+    throw error instanceof Error ? error : new Error('Failed to fetch requisition data');
   }
 } 
