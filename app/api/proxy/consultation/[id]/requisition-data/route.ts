@@ -8,7 +8,7 @@ export const revalidate = 0;
 const API_BASE_URL = 'https://v2deployment-production.up.railway.app';
 
 /**
- * Handle GET requests to fetch consultation details
+ * Handle GET requests to fetch test requisition data
  */
 export async function GET(
   request: NextRequest,
@@ -25,27 +25,20 @@ export async function GET(
       );
     }
     
-    // Get the include_history query parameter
-    const url = new URL(request.url);
-    const includeHistory = url.searchParams.get('include_history') === 'true';
-    
     // Add a timestamp for debugging
     const timestamp = new Date().toISOString();
-    console.log(`Consultation Endpoint (${timestamp}): Fetching consultation with ID: ${consultationId}`);
-    console.log(`Consultation Endpoint (${timestamp}): Include history: ${includeHistory}`);
+    console.log(`Requisition Data Endpoint (${timestamp}): Fetching requisition data for consultation ID: ${consultationId}`);
     
-    // Add cache buster
-    const cacheBuster = `&cache_bust=${Date.now()}`;
-    
-    // Forward to the consultation endpoint
-    const consultationEndpoint = `${API_BASE_URL}/consultation/${consultationId}?include_history=${includeHistory}${cacheBuster}`;
-    console.log(`Consultation Endpoint (${timestamp}): Forwarding to ${consultationEndpoint}`);
+    // Forward to the requisition-data endpoint
+    const requisitionEndpoint = `${API_BASE_URL}/consultation/${consultationId}/requisition-data`;
+    console.log(`Requisition Data Endpoint (${timestamp}): Forwarding to ${requisitionEndpoint}`);
     
     // Make the request to the AI API
-    const response = await fetch(consultationEndpoint, {
+    const response = await fetch(requisitionEndpoint, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache'
       },
@@ -53,17 +46,26 @@ export async function GET(
       next: { revalidate: 0 }
     });
     
-    console.log(`Consultation Endpoint (${timestamp}): Response status: ${response.status}`);
+    console.log(`Requisition Data Endpoint (${timestamp}): Response status: ${response.status}`);
+    
+    // Handle 404 gracefully as it means data is not yet available
+    if (response.status === 404) {
+      console.log(`Requisition Data Endpoint (${timestamp}): Requisition data not yet available`);
+      return NextResponse.json(
+        { error: 'Requisition data not yet available' },
+        { status: 404 }
+      );
+    }
     
     // Get the response data
     let data;
     try {
       data = await response.json();
-      console.log(`Consultation Endpoint (${timestamp}): Response received`);
+      console.log(`Requisition Data Endpoint (${timestamp}): Response received successfully`);
     } catch (error) {
       const text = await response.text();
-      console.log(`Consultation Endpoint (${timestamp}): Parse error:`, error);
-      console.log(`Consultation Endpoint (${timestamp}): Raw response text:`, text);
+      console.log(`Requisition Data Endpoint (${timestamp}): Parse error:`, error);
+      console.log(`Requisition Data Endpoint (${timestamp}): Raw response text:`, text);
       return NextResponse.json(
         { error: 'Invalid JSON in API response', text, parseError: error instanceof Error ? error.message : String(error) },
         { status: response.status }
@@ -80,9 +82,9 @@ export async function GET(
       }
     });
   } catch (error) {
-    console.error('Consultation Endpoint error:', error);
+    console.error('Requisition Data Endpoint error:', error);
     return NextResponse.json(
-      { error: 'Failed to proxy consultation request', message: error instanceof Error ? error.message : String(error) },
+      { error: 'Failed to fetch requisition data', message: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

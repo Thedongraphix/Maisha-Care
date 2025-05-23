@@ -3,15 +3,31 @@ import { NextRequest, NextResponse } from 'next/server';
 // Mark this route as dynamic
 export const dynamic = 'force-dynamic';
 
-const API_BASE_URL = 'https://ai-engine-production-487a.up.railway.app';
+const API_BASE_URL = 'https://v2deployment-production.up.railway.app';
 
 /**
  * Handle POST requests to the chat endpoint
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get the request body
-    const body = await request.json();
+    // Check if this is a multipart/form-data request
+    const contentType = request.headers.get('Content-Type') || '';
+    
+    let body: FormData | string;
+    let headers: HeadersInit = {
+      'Accept': 'application/json',
+    };
+
+    if (contentType.includes('multipart/form-data')) {
+      // Handle file upload with form data
+      body = await request.formData();
+      // Don't set Content-Type for FormData, let fetch set it with boundary
+    } else {
+      // Handle JSON request
+      const jsonBody = await request.json();
+      body = JSON.stringify(jsonBody);
+      headers['Content-Type'] = 'application/json';
+    }
     
     // Forward to the chat endpoint
     const chatEndpoint = `${API_BASE_URL}/chat`;
@@ -19,11 +35,8 @@ export async function POST(request: NextRequest) {
     // Make the request to the AI API
     const response = await fetch(chatEndpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(body),
+      headers,
+      body,
     });
     
     // Get the response data

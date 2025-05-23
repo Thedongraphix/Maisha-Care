@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
-const API_BASE_URL = 'https://ai-engine-production-487a.up.railway.app';
+const API_BASE_URL = 'https://v2deployment-production.up.railway.app';
 
 /**
  * Handle POST requests to the analyze-case endpoint

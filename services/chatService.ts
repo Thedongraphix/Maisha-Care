@@ -1,5 +1,7 @@
 import logger from '@/utils/logger';
-import { API_BASE_URL } from '@/utils/constants';
+
+// Use proxy routes instead of direct API calls
+const API_BASE_URL = '/api/proxy';
 
 // API response types from integration.md
 export interface ChatResponse {
@@ -11,7 +13,7 @@ export interface ChatResponse {
 
 export interface WorkflowEvent {
   consultation_id: string;
-  event_type: 'WORKFLOW_START' | 'WORKFLOW_PROGRESS' | 'WORKFLOW_COMPLETE' | 'WORKFLOW_ERROR';
+  event_type: 'WORKFLOW_START' | 'WORKFLOW_PROGRESS' | 'WORKFLOW_COMPLETE' | 'WORKFLOW_ERROR' | 'HEARTBEAT';
   workflow_name: string;
   message: string;
   timestamp: string;
@@ -104,6 +106,8 @@ let reconnectAttempt = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 30000;
+let connectionStartTime = Date.now();
+let proactiveReconnectTimer: NodeJS.Timeout | null = null;
 
 function getBackoffTime(): number {
   if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
@@ -139,36 +143,87 @@ export function connectToEventStream(
     return;
   }
 
-  logger.log(`SSE: Connecting to ${API_BASE_URL}/consultation/${consultationId}/events`);
-  eventSource = new EventSource(`${API_BASE_URL}/consultation/${consultationId}/events`);
+  // Clear any existing proactive reconnect timer
+  if (proactiveReconnectTimer) {
+    clearTimeout(proactiveReconnectTimer);
+    proactiveReconnectTimer = null;
+  }
+
+  // For SSE, we need to use the direct API URL since proxy doesn't support EventSource
+  const DIRECT_API_URL = 'https://v2deployment-production.up.railway.app';
+  logger.info(`SSE: Connecting to ${DIRECT_API_URL}/consultation/${consultationId}/events`);
+  eventSource = new EventSource(`${DIRECT_API_URL}/consultation/${consultationId}/events`);
 
   eventSource.onopen = () => {
-    logger.log('SSE: Connection established.');
+    logger.info('SSE: Connection established.');
     resetBackoff();
+    connectionStartTime = Date.now();
+    
+    // Schedule proactive reconnection before Railway's 5-minute timeout
+    // Reconnect at 4 minutes 30 seconds to be safe
+    const PROACTIVE_RECONNECT_TIME = 4.5 * 60 * 1000; // 4.5 minutes
+    proactiveReconnectTimer = setTimeout(() => {
+      logger.info('SSE: Proactively reconnecting before timeout...');
+      disconnectEventStream();
+      // Small delay before reconnecting
+      setTimeout(() => connectToEventStream(onMessage, onError), 100);
+    }, PROACTIVE_RECONNECT_TIME);
   };
 
   eventSource.onmessage = (event) => {
     try {
       const eventData: WorkflowEvent = JSON.parse(event.data);
-      logger.debug('SSE: Received event:', eventData);
-      onMessage(eventData); // Pass parsed data to the callback
+      
+      // Log ALL events for debugging
+      logger.debug('SSE: Raw event received:', {
+        type: eventData.event_type,
+        workflow: eventData.workflow_name,
+        message: eventData.message?.substring(0, 50), // First 50 chars
+        time: new Date().toISOString()
+      });
+      
+      // Check for various heartbeat formats
+      const isHeartbeat = 
+        eventData.event_type === 'HEARTBEAT' || 
+        eventData.workflow_name === 'heartbeat' || 
+        eventData.workflow_name === 'ping' ||
+        eventData.message === 'ping' ||
+        eventData.message === 'keep-alive' ||
+        eventData.message?.toLowerCase().includes('heartbeat');
+        
+      if (isHeartbeat) {
+        logger.info('SSE: Heartbeat detected at', new Date().toISOString());
+        return;
+      }
+      
+      onMessage(eventData);
     } catch (error) {
-      logger.error('SSE: Error parsing event data:', error);
+      logger.error('SSE: Error parsing event data:', error, 'Raw event:', event.data);
     }
   };
 
   eventSource.onerror = (errorEvent) => {
     logger.error('SSE: Connection error:', errorEvent);
-    eventSource?.close(); 
+    
+    // Clear proactive reconnect timer
+    if (proactiveReconnectTimer) {
+      clearTimeout(proactiveReconnectTimer);
+      proactiveReconnectTimer = null;
+    }
+    
+    eventSource?.close();
+    
     if (onError) {
       onError(errorEvent);
     }
+    
+    // Implement exponential backoff for reconnection
     const backoffTime = getBackoffTime();
     if (backoffTime !== -1) {
-      logger.log(`SSE: Retrying connection in ${backoffTime / 1000}s...`);
+      logger.info(`SSE: Retrying connection in ${backoffTime / 1000}s...`);
       setTimeout(() => connectToEventStream(onMessage, onError), backoffTime);
-      } else {
-        logger.error('SSE: Stopped retrying after max attempts.');
+    } else {
+      logger.error('SSE: Stopped retrying after max attempts.');
     }
   };
 }
@@ -178,10 +233,16 @@ export function connectToEventStream(
  */
 export function disconnectEventStream(): void {
   if (eventSource) {
-    logger.log('SSE: Disconnecting...');
+    logger.info('SSE: Disconnecting...');
     eventSource.close();
     eventSource = null;
-    resetBackoff(); // Reset backoff attempts when explicitly disconnecting
+    resetBackoff();
+    
+    // Clear proactive reconnect timer
+    if (proactiveReconnectTimer) {
+      clearTimeout(proactiveReconnectTimer);
+      proactiveReconnectTimer = null;
+    }
   }
 }
 
@@ -214,4 +275,5 @@ export async function fetchRequisitionData(): Promise<TestRequisitionData | null
     logger.error('Requisition data fetch error:', error);
     throw error instanceof Error ? error : new Error('Failed to fetch requisition data');
   }
-} 
+}
+

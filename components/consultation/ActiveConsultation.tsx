@@ -61,6 +61,7 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const [showRequisitionButton, setShowRequisitionButton] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +100,10 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   const handleWorkflowEvent = useCallback((eventData: WorkflowEvent) => {
     logger.info('SSE Event Received:', eventData);
     
+    if (isReconnecting) {
+      setIsReconnecting(false);
+    }
+    
     if (eventData.consultation_id !== consultationId) {
         logger.warn('SSE Event for different consultation ID received, ignoring.', { current: consultationId, event: eventData.consultation_id });
         return;
@@ -131,13 +136,14 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         // if (eventData.stage) setCurrentStage(eventData.stage);
       }
     }
-  }, [consultationId]);
+  }, [consultationId, isReconnecting]);
 
   const handleSseError = useCallback((error: Event) => {
     logger.error('SSE Connection Error:', error);
+    setIsReconnecting(true);
     setWorkflowStatus({
-      type: 'error',
-      message: 'Real-time connection lost. Retrying...'
+      type: 'info',
+      message: 'Reconnecting to server...'
     });
   }, []);
 
@@ -341,7 +347,13 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
           {currentStage && <p className="text-xs opacity-90 font-jost">Stage: <span className='font-semibold capitalize'>{currentStage.replace(/_/g, ' ')}</span></p>}
         </div>
         <div className='flex items-center gap-2'>
-        {canShowFinalizeButton && (
+          {isReconnecting && (
+            <div className="flex items-center gap-1 text-xs bg-white/20 px-2 py-1 rounded-full">
+              <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+              <span>Reconnecting...</span>
+            </div>
+          )}
+          {canShowFinalizeButton && (
             <button
                 onClick={handleFinalizeConsultation}
                 title="Conclude Consultation"
@@ -349,14 +361,14 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
             >
                 Conclude
             </button>
-        )}
-        <button 
-          onClick={handleResetChat}
-          title="Start New Chat"
-          className="p-2 rounded-full hover:bg-primary-foreground/10 transition-colors"
-        >
-          <RotateCcw size={20} />
-        </button>
+          )}
+          <button 
+            onClick={handleResetChat}
+            title="Start New Chat"
+            className="p-2 rounded-full hover:bg-primary-foreground/10 transition-colors"
+          >
+            <RotateCcw size={20} />
+          </button>
         </div>
       </div>
 

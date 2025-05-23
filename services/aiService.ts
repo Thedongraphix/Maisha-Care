@@ -1,7 +1,7 @@
 // Update to use a local proxy instead of direct API calls
 // const API_BASE_URL = 'http://ai-engine-production-487a.up.railway.app';
 const API_BASE_URL = '/api/proxy';  // This will use a local API route as a proxy
-const DIRECT_API_URL = 'https://ai-engine-production-487a.up.railway.app';
+const DIRECT_API_URL = 'https://v2deployment-production.up.railway.app';
 
 // Define interfaces for API responses
 interface HealthCheckResponse {

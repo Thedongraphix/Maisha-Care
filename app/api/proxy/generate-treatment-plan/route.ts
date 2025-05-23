@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Mark this route as dynamic
 export const dynamic = 'force-dynamic';
 
-const API_BASE_URL = 'https://ai-engine-production-487a.up.railway.app';
+const API_BASE_URL = 'https://v2deployment-production.up.railway.app';
 
 /**
  * Handle POST requests to the generate-treatment-plan endpoint
