@@ -18,51 +18,53 @@ export async function GET(
     
     console.log('Proxying SSE request to:', backendUrl);
     
-    const response = await fetch(backendUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-
-    if (!response.ok) {
-      console.error('Backend SSE connection failed:', response.status, response.statusText);
-      return new Response(`Backend error: ${response.status}`, { status: response.status });
-    }
-
-    // Create a readable stream to proxy the SSE data
+    // Don't use fetch for SSE - create a proper streaming response
+    const encoder = new TextEncoder();
+    
     const stream = new ReadableStream({
-      start(controller) {
-        const reader = response.body?.getReader();
-        
-        if (!reader) {
-          controller.close();
-          return;
-        }
+      async start(controller) {
+        try {
+          const response = await fetch(backendUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+            },
+            // Important: Don't abort on timeout for SSE
+            signal: undefined,
+          });
 
-        function pump(): Promise<void> {
-          if (!reader) {
-            return Promise.resolve();
+          if (!response.ok || !response.body) {
+            console.error('Backend SSE connection failed:', response.status);
+            controller.close();
+            return;
           }
-          
-          return reader.read().then(({ done, value }) => {
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+
+          while (true) {
+            const { done, value } = await reader.read();
+            
             if (done) {
+              console.log('SSE stream ended');
               controller.close();
-              return;
+              break;
             }
             
-            // Forward the chunk to the client
+            // Forward the raw SSE data
             controller.enqueue(value);
-            return pump();
-          }).catch((error) => {
-            console.error('SSE stream error:', error);
-            controller.error(error);
-          });
+            
+            // Log the data for debugging
+            const text = decoder.decode(value, { stream: true });
+            if (text.includes('data:')) {
+              console.log('SSE data forwarded:', text.substring(0, 200));
+            }
+          }
+        } catch (error) {
+          console.error('SSE streaming error:', error);
+          controller.error(error);
         }
-
-        return pump();
       },
     });
 
@@ -70,11 +72,10 @@ export async function GET(
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
-        'Access-Control-Allow-Headers': 'Cache-Control',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+        'Transfer-Encoding': 'chunked',
       },
     });
 

@@ -106,6 +106,10 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const connectionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Add state for tracking file processing
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const fileProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleWorkflowEvent = useCallback((eventData: WorkflowEvent) => {
     logger.info('SSE Event Received:', eventData);
     
@@ -126,7 +130,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         setSseConnected(true);
         setIsReconnecting(false);
         
-        // Extract stage from connection message if available
         const stageMatch = eventData.message.match(/Current stage: (\w+)/);
         if (stageMatch) {
           const stage = stageMatch[1];
@@ -135,16 +138,63 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         }
       } else if (eventData.message?.includes('timeout soon')) {
         logger.warn('Connection timeout warning received');
-        // Could show a warning to the user
         setWorkflowStatus({
           type: 'info',
           message: 'Connection will timeout soon. Your progress is saved.',
           workflowName: 'connection'
         });
-        
-        // Don't clear this status message automatically
         return;
       }
+    }
+
+    // Special handling for test analysis workflow
+    if (eventData.workflow_name === 'test_analysis') {
+      if (eventData.event_type === 'WORKFLOW_START') {
+        setIsProcessingFile(true);
+        setWorkflowStatus({
+          type: 'loading',
+          message: 'Analyzing your test results. This may take a few minutes...',
+          workflowName: 'test_analysis'
+        });
+      } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
+        setIsProcessingFile(false);
+        setIsSending(false);
+        setIsLoading(false);
+        
+        // Add the analysis results to chat
+        addMessage({
+          id: Date.now().toString() + '-analysis',
+          text: eventData.message,
+          sender: 'assistant',
+          timestamp: new Date(eventData.timestamp),
+        });
+        
+        // Clear any file processing timeout
+        if (fileProcessingTimeoutRef.current) {
+          clearTimeout(fileProcessingTimeoutRef.current);
+        }
+        
+        // Clear workflow status after showing the message
+        setTimeout(() => setWorkflowStatus(null), 3000);
+      } else if (eventData.event_type === 'WORKFLOW_ERROR') {
+        setIsProcessingFile(false);
+        setIsSending(false);
+        setIsLoading(false);
+        
+        addMessage({
+          id: Date.now().toString() + '-error',
+          text: `Error analyzing test results: ${eventData.message}`,
+          sender: 'system',
+          timestamp: new Date(eventData.timestamp),
+        });
+        
+        if (fileProcessingTimeoutRef.current) {
+          clearTimeout(fileProcessingTimeoutRef.current);
+        }
+      }
+      
+      // Don't process other workflow status updates for test_analysis
+      return;
     }
 
     let statusType: WorkflowStatus['type'] = 'info';
@@ -165,23 +215,19 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     } else if (eventData.event_type === 'WORKFLOW_COMPLETE' || eventData.event_type === 'WORKFLOW_ERROR') {
       setIsLoading(false);
       setIsSending(false);
+      setIsProcessingFile(false);
       setTimeout(() => setWorkflowStatus(null), statusType === 'error' ? 7000 : 4000);
     }
 
     if (eventData.event_type === 'WORKFLOW_COMPLETE') {
       if (eventData.workflow_name === 'test_recommendation') {
         setShowRequisitionButton(true);
-        // Add the test recommendation message to chat
         addMessage({
           id: Date.now().toString() + '-workflow',
           text: eventData.message,
           sender: 'assistant',
           timestamp: new Date(eventData.timestamp),
         });
-      }
-      if (eventData.workflow_name === 'diagnosis' || eventData.workflow_name === 'treatment_plan') {
-        // Potentially update currentStage directly if SSE provides it
-        // if (eventData.stage) setCurrentStage(eventData.stage);
       }
     }
   }, [consultationId, isReconnecting]);
@@ -278,7 +324,28 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
 
     setIsSending(true);
     setIsLoading(true); 
-    setWorkflowStatus({ type: 'loading', message: 'Sending your message...' });
+    
+    // Special handling for file uploads
+    if (selectedFile) {
+      setIsProcessingFile(true);
+      setWorkflowStatus({ 
+        type: 'loading', 
+        message: 'Uploading and analyzing your test results. This may take several minutes...' 
+      });
+      
+      // Set a longer timeout warning for file processing
+      fileProcessingTimeoutRef.current = setTimeout(() => {
+        if (isProcessingFile) {
+          setWorkflowStatus({
+            type: 'info',
+            message: 'Still processing your test results. Large files may take extra time...',
+            workflowName: 'test_analysis'
+          });
+        }
+      }, 60000); // Show message after 1 minute
+    } else {
+      setWorkflowStatus({ type: 'loading', message: 'Sending your message...' });
+    }
 
     const optimisticUserMessage: Message = {
       id: Date.now().toString(),
@@ -294,7 +361,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     try {
       const response: ChatResponse = await sendMessage(textToSend, selectedFile || undefined);
       
-      // Check if this is the first response with a consultation ID
       const isNewConsultation = !consultationId && response.consultation_id;
       
       if (response.consultation_id && !consultationId) {
@@ -303,6 +369,16 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       } else if (response.consultation_id && consultationId !== response.consultation_id) {
         setConsultationId(response.consultation_id);
         logger.info(`Consultation ID updated: ${response.consultation_id}`);
+      }
+      
+      // Check if this is a processing response
+      if (response.stage === 'processing' && selectedFile) {
+        // Don't add the processing message as a regular message
+        // The actual response will come through SSE
+        logger.info('File upload initiated, waiting for SSE completion event');
+        setIsSending(false);
+        // Keep isLoading true and isProcessingFile true
+        return;
       }
       
       setCurrentStage(response.stage);
@@ -323,15 +399,28 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       
       setIsSending(false);
       setIsLoading(false);
+      setIsProcessingFile(false);
       setWorkflowStatus(null);
       
-      // Log SSE connection status for debugging
+      if (fileProcessingTimeoutRef.current) {
+        clearTimeout(fileProcessingTimeoutRef.current);
+      }
+      
       if (isNewConsultation) {
         logger.info('First message sent, SSE should connect soon...');
       }
 
     } catch (error: any) {
       logger.error('Error sending message:', error);
+      
+      // Special handling for timeout during file upload
+      if (error.message?.includes('AbortError') && selectedFile) {
+        logger.info('File upload request timed out, but processing continues on server');
+        setIsSending(false);
+        // Keep loading states active - the response will come through SSE
+        return;
+      }
+      
       addMessage({
         id: Date.now().toString() + '-err',
         text: error.message || "Sorry, I encountered an error. Please try again.",
@@ -339,12 +428,18 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         timestamp: createTimestamp(),
       });
       setWorkflowStatus({ type: 'error', message: error.message || "Failed to send message." });
+      
       if (error.message && error.message.toLowerCase().includes('consultation not found')){
         setConsultationId(null);
       }
       
       setIsSending(false);
       setIsLoading(false);
+      setIsProcessingFile(false);
+      
+      if (fileProcessingTimeoutRef.current) {
+        clearTimeout(fileProcessingTimeoutRef.current);
+      }
     }
   };
 
@@ -722,10 +817,19 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     }
   };
 
-  const isInputDisabled = isLoading || isSending;
+  // Update the input disabled state to consider file processing
+  const isInputDisabled = isLoading || isSending || isProcessingFile;
   const canShowFileUpload = currentStage === 'awaiting_tests';
   const canShowFinalizeButton = currentStage === 'Completed' || currentStage === 'treatment_plan_generated' || currentStage === 'diagnosis_complete';
 
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (fileProcessingTimeoutRef.current) {
+        clearTimeout(fileProcessingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <>

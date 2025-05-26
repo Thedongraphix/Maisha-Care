@@ -30,6 +30,16 @@ export interface TestRequisitionData {
   priority: 'Routine' | 'Urgent';
 }
 
+// Add a new interface for file upload status
+export interface FileUploadResponse {
+  consultation_id: string;
+  message: string;
+  stage: string;
+  next_steps?: string;
+  processing?: boolean;
+  processing_message?: string;
+}
+
 const getConsultationId = (): string | null => {
   if (typeof window !== 'undefined') {
     return localStorage.getItem('maisha_consultation_id');
@@ -45,9 +55,7 @@ const setConsultationId = (id: string): void => {
 
 /**
  * Send a message to the AI API (supports file uploads)
- * @param messageText - The user's message text
- * @param fileToUpload - Optional file to upload
- * @returns Promise<ChatResponse> - The AI's response
+ * Modified to handle long-running file processing
  */
 export async function sendMessage(messageText: string, fileToUpload?: File): Promise<ChatResponse> {
   logger.debug('Sending message to API:', messageText, fileToUpload ? `with file: ${fileToUpload.name}` : '');
@@ -66,17 +74,22 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
   }
 
   try {
+    // Set a reasonable timeout for the initial request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
     const response = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
       body: formData,
-      // Do not set Content-Type header manually for FormData
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
     logger.debug('API response status:', response.status);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: `HTTP error: ${response.status}` }));
-      // Attempt to clear consultation ID if it's a "not found" error, then rethrow for UI handling.
+      
       if (response.status === 404 && errorData.detail && errorData.detail.toLowerCase().includes('consultation not found')) {
         logger.warn('Consultation not found on server. Clearing local ID.');
         if (typeof window !== 'undefined') {
@@ -94,9 +107,23 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
     }
 
     return data;
-  } catch (error) {
+  } catch (error: any) {
+    // Handle abort/timeout specially
+    if (error.name === 'AbortError') {
+      logger.warn('Request timed out, but processing may continue on server');
+      
+      // Return a special response indicating processing is happening
+      return {
+        consultation_id: consultationId || '',
+        message: fileToUpload 
+          ? "I'm analyzing your test results. This may take a few minutes. I'll notify you when the analysis is complete."
+          : "Processing your request...",
+        stage: 'processing',
+        next_steps: 'Please wait while I analyze the information...'
+      };
+    }
+    
     logger.error('Error sending message to API:', error);
-    // Re-throw the error so the component can handle it (e.g., display to user)
     throw error instanceof Error ? error : new Error('Failed to communicate with the AI service');
   }
 }
