@@ -121,9 +121,12 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     });
 
     if (eventData.event_type === 'WORKFLOW_START' || eventData.event_type === 'WORKFLOW_PROGRESS') {
-      setIsLoading(true); 
-    } else {
+      if (eventData.workflow_name !== 'connection') {
+        setIsLoading(true);
+      }
+    } else if (eventData.event_type === 'WORKFLOW_COMPLETE' || eventData.event_type === 'WORKFLOW_ERROR') {
       setIsLoading(false);
+      setIsSending(false);
       setTimeout(() => setWorkflowStatus(null), statusType === 'error' ? 7000 : 4000);
     }
 
@@ -200,7 +203,10 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       setSelectedFile(null); 
       setFilePreview(null);
       if(fileInputRef.current) fileInputRef.current.value = '';
-      setWorkflowStatus(null); 
+      
+      setIsSending(false);
+      setIsLoading(false);
+      setWorkflowStatus(null);
 
     } catch (error: any) {
       logger.error('Error sending message:', error);
@@ -214,9 +220,9 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       if (error.message && error.message.toLowerCase().includes('consultation not found')){
         setConsultationId(null);
       }
-    } finally {
+      
       setIsSending(false);
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   };
 
