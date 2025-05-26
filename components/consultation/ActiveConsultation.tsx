@@ -549,11 +549,21 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     }
   };
 
-  const closePdfModal = () => {
-    setShowPdfModal(false);
-    setPdfBlob(null);
-    setPdfFileName('');
-  };
+const closePdfModal = () => {
+   setShowPdfModal(false);
+  // Revoke the object URL to free memory
+  if (pdfBlob) {
+    const iframes = document.querySelectorAll('iframe[title="PDF Preview"]');
+    iframes.forEach(iframe => {
+      const src = (iframe as HTMLIFrameElement).src;
+      if (src.startsWith('blob:')) {
+        URL.revokeObjectURL(src);
+      }
+    });
+  }
+   setPdfBlob(null);
+   setPdfFileName('');
+ };
 
   const toggleRecording = () => {
     setIsRecording(!isRecording);
