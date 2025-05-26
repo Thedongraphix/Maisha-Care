@@ -101,16 +101,50 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     setMessages(prev => addToTop ? [message, ...prev] : [...prev, message]);
   };
 
+  // Add state to track SSE connection status
+  const [sseConnected, setSseConnected] = useState(false);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleWorkflowEvent = useCallback((eventData: WorkflowEvent) => {
     logger.info('SSE Event Received:', eventData);
     
     if (isReconnecting) {
       setIsReconnecting(false);
+      setSseConnected(true);
     }
     
     if (eventData.consultation_id !== consultationId) {
         logger.warn('SSE Event for different consultation ID received, ignoring.', { current: consultationId, event: eventData.consultation_id });
         return;
+    }
+
+    // Handle connection-specific messages
+    if (eventData.workflow_name === 'connection') {
+      if (eventData.message?.includes('Connected to consultation')) {
+        logger.info('SSE connection established to consultation');
+        setSseConnected(true);
+        setIsReconnecting(false);
+        
+        // Extract stage from connection message if available
+        const stageMatch = eventData.message.match(/Current stage: (\w+)/);
+        if (stageMatch) {
+          const stage = stageMatch[1];
+          setCurrentStage(stage);
+          logger.info(`Current stage from SSE: ${stage}`);
+        }
+      } else if (eventData.message?.includes('timeout soon')) {
+        logger.warn('Connection timeout warning received');
+        // Could show a warning to the user
+        setWorkflowStatus({
+          type: 'info',
+          message: 'Connection will timeout soon. Your progress is saved.',
+          workflowName: 'connection'
+        });
+        
+        // Don't clear this status message automatically
+        return;
+      }
     }
 
     let statusType: WorkflowStatus['type'] = 'info';
@@ -137,6 +171,13 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     if (eventData.event_type === 'WORKFLOW_COMPLETE') {
       if (eventData.workflow_name === 'test_recommendation') {
         setShowRequisitionButton(true);
+        // Add the test recommendation message to chat
+        addMessage({
+          id: Date.now().toString() + '-workflow',
+          text: eventData.message,
+          sender: 'assistant',
+          timestamp: new Date(eventData.timestamp),
+        });
       }
       if (eventData.workflow_name === 'diagnosis' || eventData.workflow_name === 'treatment_plan') {
         // Potentially update currentStage directly if SSE provides it
@@ -147,21 +188,87 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
 
   const handleSseError = useCallback((error: Event) => {
     logger.error('SSE Connection Error:', error);
+    setSseConnected(false);
     setIsReconnecting(true);
     setWorkflowStatus({
       type: 'info',
       message: 'Reconnecting to server...'
     });
-  }, []);
-
-  useEffect(() => {
-    if (consultationId) {
-      connectToEventStream(handleWorkflowEvent, handleSseError);
-    } else {
-      if (typeof window !== 'undefined') localStorage.removeItem('maisha_consultation_id');
+    
+    // Clear any existing reconnect timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
     }
+    
+    // Schedule reconnection
+    reconnectTimeoutRef.current = setTimeout(() => {
+      if (consultationId) {
+        logger.info('Attempting to reconnect SSE...');
+        connectToEventStream(handleWorkflowEvent, handleSseError);
+      }
+    }, 2000);
+  }, [consultationId, handleWorkflowEvent]);
+
+  // Improved SSE connection effect
+  useEffect(() => {
+    let isActive = true;
+    
+    const initializeSSE = () => {
+      if (consultationId && isActive) {
+        logger.info(`Initializing SSE connection for consultation: ${consultationId}`);
+        connectToEventStream(handleWorkflowEvent, handleSseError);
+        setSseConnected(true);
+        
+        // Set up periodic connection check (every 4 minutes to beat 5-minute timeout)
+        if (connectionCheckIntervalRef.current) {
+          clearInterval(connectionCheckIntervalRef.current);
+        }
+        
+        connectionCheckIntervalRef.current = setInterval(() => {
+          if (isActive && consultationId) {
+            logger.info('Performing periodic SSE reconnection to prevent timeout...');
+            disconnectEventStream();
+            setTimeout(() => {
+              if (isActive && consultationId) {
+                connectToEventStream(handleWorkflowEvent, handleSseError);
+              }
+            }, 100);
+          }
+        }, 4 * 60 * 1000); // 4 minutes
+      }
+    };
+    
+    if (consultationId) {
+      // Delay SSE connection slightly to ensure consultation is fully established
+      const timer = setTimeout(initializeSSE, 500);
+      return () => {
+        isActive = false;
+        clearTimeout(timer);
+        if (connectionCheckIntervalRef.current) {
+          clearInterval(connectionCheckIntervalRef.current);
+        }
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
+        disconnectEventStream();
+        setSseConnected(false);
+      };
+    } else {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('maisha_consultation_id');
+      }
+    }
+    
     return () => {
+      isActive = false;
+      if (connectionCheckIntervalRef.current) {
+        clearInterval(connectionCheckIntervalRef.current);
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
       disconnectEventStream();
+      setSseConnected(false);
     };
   }, [consultationId, handleWorkflowEvent, handleSseError]);
 
@@ -187,11 +294,17 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     try {
       const response: ChatResponse = await sendMessage(textToSend, selectedFile || undefined);
       
+      // Check if this is the first response with a consultation ID
+      const isNewConsultation = !consultationId && response.consultation_id;
+      
       if (response.consultation_id && !consultationId) {
         setConsultationId(response.consultation_id);
+        logger.info(`New consultation ID received: ${response.consultation_id}`);
       } else if (response.consultation_id && consultationId !== response.consultation_id) {
         setConsultationId(response.consultation_id);
+        logger.info(`Consultation ID updated: ${response.consultation_id}`);
       }
+      
       setCurrentStage(response.stage);
       setShowRequisitionButton(response.stage === 'awaiting_tests' || (showRequisitionButton && response.stage !== 'test_recommendation_pending'));
 
@@ -211,6 +324,11 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       setIsSending(false);
       setIsLoading(false);
       setWorkflowStatus(null);
+      
+      // Log SSE connection status for debugging
+      if (isNewConsultation) {
+        logger.info('First message sent, SSE should connect soon...');
+      }
 
     } catch (error: any) {
       logger.error('Error sending message:', error);
@@ -533,37 +651,51 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
 
   const downloadPdf = () => {
     if (pdfBlob && pdfFileName) {
+      // Create a temporary URL for the blob
       const url = URL.createObjectURL(pdfBlob);
+      
+      // Create a temporary anchor element and trigger download
       const link = document.createElement('a');
       link.href = url;
       link.download = pdfFileName;
+      link.style.display = 'none';
+      
+      // Append to body, click, and remove
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
       
       setWorkflowStatus({
         type: 'success',
         message: `PDF "${pdfFileName}" downloaded successfully.`
       });
+      
+      logger.info(`PDF downloaded: ${pdfFileName}`);
     }
   };
 
-const closePdfModal = () => {
-   setShowPdfModal(false);
-  // Revoke the object URL to free memory
-  if (pdfBlob) {
-    const iframes = document.querySelectorAll('iframe[title="PDF Preview"]');
-    iframes.forEach(iframe => {
-      const src = (iframe as HTMLIFrameElement).src;
-      if (src.startsWith('blob:')) {
-        URL.revokeObjectURL(src);
-      }
-    });
-  }
-   setPdfBlob(null);
-   setPdfFileName('');
- };
+  const closePdfModal = () => {
+    setShowPdfModal(false);
+    
+    // Clean up the blob URL used in the iframe
+    if (pdfBlob) {
+      const iframes = document.querySelectorAll('iframe[title="PDF Preview"]');
+      iframes.forEach(iframe => {
+        const src = (iframe as HTMLIFrameElement).src;
+        if (src.startsWith('blob:')) {
+          URL.revokeObjectURL(src);
+        }
+      });
+    }
+    
+    setPdfBlob(null);
+    setPdfFileName('');
+  };
 
   const toggleRecording = () => {
     setIsRecording(!isRecording);
@@ -604,6 +736,17 @@ const closePdfModal = () => {
             {currentStage && <p className="text-xs opacity-90 font-jost">Stage: <span className='font-semibold capitalize'>{currentStage.replace(/_/g, ' ')}</span></p>}
           </div>
           <div className='flex items-center gap-2'>
+            {/* SSE Connection Status Indicator */}
+            {consultationId && (
+              <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+                sseConnected ? 'bg-green-500/20' : 'bg-amber-500/20'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  sseConnected ? 'bg-green-400' : 'bg-amber-400 animate-pulse'
+                }`} />
+                <span>{sseConnected ? 'Connected' : 'Connecting...'}</span>
+              </div>
+            )}
             {isReconnecting && (
               <div className="flex items-center gap-1 text-xs bg-white/20 px-2 py-1 rounded-full">
                 <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
@@ -755,17 +898,17 @@ const closePdfModal = () => {
               </button>
             </div>
             
-            <div className="flex-1 overflow-auto p-4">
+            <div className="flex-1 overflow-auto p-4 bg-gray-50">
               <iframe
                 src={URL.createObjectURL(pdfBlob)}
-                className="w-full h-full min-h-[600px] border border-gray-200 rounded"
+                className="w-full h-full min-h-[600px] border border-gray-200 rounded bg-white"
                 title="PDF Preview"
               />
             </div>
             
             <div className="flex items-center justify-between p-4 border-t border-gray-200 bg-gray-50">
-              <p className="text-sm text-gray-600">
-                <FileText size={16} className="inline mr-1" />
+              <p className="text-sm text-gray-600 flex items-center">
+                <FileText size={16} className="mr-1" />
                 {pdfFileName}
               </p>
               <div className="flex gap-3">
@@ -773,14 +916,11 @@ const closePdfModal = () => {
                   onClick={closePdfModal}
                   className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
                 >
-                  Cancel
+                  Close
                 </button>
                 <button
-                  onClick={() => {
-                    downloadPdf();
-                    closePdfModal();
-                  }}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium text-sm flex items-center gap-2"
+                  onClick={downloadPdf}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm flex items-center gap-2"
                 >
                   <DownloadCloud size={16} />
                   Download PDF

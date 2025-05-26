@@ -133,6 +133,7 @@ export const connectToEventStream = (
   onError?: (error: Event) => void
 ) => {
   if (eventSource) {
+    logger.info('Closing existing SSE connection before creating new one');
     eventSource.close();
   }
 
@@ -144,49 +145,89 @@ export const connectToEventStream = (
 
   const url = `${API_BASE_URL}/consultation/${consultationId}/events`;
   logger.info('Connecting to SSE:', url);
-
-  eventSource = new EventSource(url);
-
-  eventSource.onopen = () => {
-    logger.info('SSE connection opened');
-  };
-
-  eventSource.onmessage = (event) => {
-    try {
-      const eventData: WorkflowEvent = JSON.parse(event.data);
-      logger.info('SSE event received:', eventData);
-      onEvent(eventData);
-    } catch (error) {
-      logger.error('Error parsing SSE event:', error);
-    }
-  };
-
-  eventSource.onerror = (error) => {
-    logger.error('SSE connection error:', error);
-    if (onError) {
-      onError(error);
-    }
+  
+  try {
+    eventSource = new EventSource(url);
+    connectionStartTime = Date.now();
     
-    // FIX: Add automatic reconnection logic
-    if (eventSource?.readyState === EventSource.CLOSED) {
-      logger.info('SSE connection closed, attempting to reconnect...');
-      setTimeout(() => {
-        if (getConsultationId()) {
-          connectToEventStream(onEvent, onError);
-        }
-      }, 2000);
-    }
-  };
+    eventSource.onopen = () => {
+      logger.info('SSE connection opened successfully');
+      resetBackoff();
+    };
 
-  // FIX: Handle ping events to keep connection alive
-  eventSource.addEventListener('ping', (event) => {
-    try {
-      const pingData = JSON.parse(event.data);
-      logger.debug('SSE ping received:', pingData);
-    } catch (error) {
-      logger.error('Error parsing ping event:', error);
+    eventSource.onmessage = (event) => {
+      try {
+        const eventData: WorkflowEvent = JSON.parse(event.data);
+        logger.info('SSE message event received:', eventData);
+        
+        // Handle timeout warning specially
+        if (eventData.workflow_name === 'connection' && 
+            eventData.message?.includes('timeout soon')) {
+          logger.warn('SSE connection timeout warning received');
+          // Could trigger a proactive reconnect here if needed
+        }
+        
+        onEvent(eventData);
+      } catch (error) {
+        logger.error('Error parsing SSE event:', error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      logger.error('SSE connection error:', error);
+      logger.info(`SSE readyState: ${eventSource?.readyState}`);
+      
+      if (onError) {
+        onError(error);
+      }
+      
+      // Add automatic reconnection logic with backoff
+      if (eventSource?.readyState === EventSource.CLOSED) {
+        const backoffTime = getBackoffTime();
+        if (backoffTime > 0) {
+          logger.info(`SSE connection closed, attempting to reconnect in ${backoffTime}ms...`);
+          setTimeout(() => {
+            if (getConsultationId()) {
+              connectToEventStream(onEvent, onError);
+            }
+          }, backoffTime);
+        } else {
+          logger.error('Max reconnection attempts reached for SSE');
+        }
+      }
+    };
+
+    // Handle ping events - these come as a separate event type
+    eventSource.addEventListener('ping', (event: MessageEvent) => {
+      try {
+        const pingData = JSON.parse(event.data);
+        logger.debug('SSE ping received:', pingData);
+        
+        // Log connection health
+        if (pingData.connection_duration) {
+          logger.debug(`Connection healthy - Duration: ${pingData.connection_duration}, Last activity: ${pingData.last_activity}`);
+        }
+      } catch (error) {
+        logger.error('Error parsing ping event:', error);
+      }
+    });
+    
+    // Log connection duration periodically
+    const logInterval = setInterval(() => {
+      if (eventSource && eventSource.readyState === EventSource.OPEN) {
+        const duration = Date.now() - connectionStartTime;
+        logger.debug(`SSE connection alive for ${Math.floor(duration / 1000)}s`);
+      } else {
+        clearInterval(logInterval);
+      }
+    }, 30000); // Log every 30 seconds
+    
+  } catch (error) {
+    logger.error('Failed to create EventSource:', error);
+    if (onError) {
+      onError(new Event('connection-failed'));
     }
-  });
+  }
 };
 
 /**
