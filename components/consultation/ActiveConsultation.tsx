@@ -12,7 +12,7 @@ import {
   reconnectAttempt,
   MAX_RECONNECT_ATTEMPTS
 } from '@/services/chatService';
-import { resetChatState, getConsultationId as getStoredConsultationId } from '@/utils/consultationUtils';
+import { resetChatState, getConsultationId as getStoredConsultationId, saveConsultationId } from '@/utils/consultationUtils';
 import logger from '@/utils/logger';
 import { Paperclip, Send, FileText, AlertCircle, Info, RotateCcw, XCircle, DownloadCloud, CheckCircle2, Mic, Square } from 'lucide-react';
 import { ThreeDots } from 'react-loader-spinner';
@@ -291,19 +291,25 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     const storedId = getStoredConsultationId();
     if (storedId) {
       setConsultationId(storedId);
-      addMessage({
-        id: Date.now().toString() + '-system',
-        text: "Welcome back! Resuming your previous session.",
-        sender: 'system',
-        timestamp: createTimestamp(),
-      }, true); 
+      // Avoid adding "Welcome back" if messages already exist, e.g. from a hot reload
+      if (messages.length === 0) {
+        addMessage({
+          id: Date.now().toString() + '-system',
+          text: "Welcome back! Resuming your previous session.",
+          sender: 'system',
+          timestamp: createTimestamp(),
+        }, true);
+      }
     } else {
-       addMessage({
-        id: Date.now().toString(),
-        text: "Hello! I'm Dr. Stacy, your Maisha Care AI assistant. How can I help you today?",
-        sender: 'assistant',
-        timestamp: createTimestamp(), 
-      });
+       // Avoid adding initial message if messages already exist
+       if (messages.length === 0) {
+        addMessage({
+          id: Date.now().toString(),
+          text: "Hello! I'm Dr. Stacy, your Maisha Care AI assistant. How can I help you today?",
+          sender: 'assistant',
+          timestamp: createTimestamp(),
+        });
+      }
     }
   }, []);
 
@@ -311,6 +317,7 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     logger.info('SSE connection opened callback triggered.');
     setSseConnected(true);
     setIsReconnectingSse(false);
+    // Clear any "reconnecting" or "failed" messages
     setWorkflowStatus(prev => {
         if (prev && (prev.message.includes('Reconnecting') || prev.message.includes('Connection issues') || prev.message.includes('Failed to connect'))) {
             return null;
@@ -321,37 +328,45 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
 
   useEffect(() => {
     let isActive = true;
-    
-    if (consultationId && isActive) {
+    const currentIdInStorage = getStoredConsultationId();
+
+    if (consultationId && consultationId === currentIdInStorage && isActive) {
       logger.info(`Effect: Initializing SSE for consultation: ${consultationId}`);
-      const stableHandleWorkflowEvent = (event: WorkflowEvent) => {
-        if (isActive) handleWorkflowEvent(event);
-      };
-      const stableHandleSseError = (error: Event) => {
-        if (isActive) handleSseError(error);
-      };
-      const stableHandleSseOpen = () => {
-        if (isActive) handleSseOpen();
-      };
-      
-      connectToEventStream(stableHandleWorkflowEvent, stableHandleSseError, stableHandleSseOpen);
-    } else if (!consultationId) {
-      disconnectEventStream();
-      setSseConnected(false);
-      setIsReconnectingSse(false);
+      // Pass stable callbacks to connectToEventStream
+      connectToEventStream(handleWorkflowEvent, handleSseError, handleSseOpen);
+    } else {
+      if (consultationId && consultationId !== currentIdInStorage) {
+        logger.warn(`SSE Effect: Component's consultationId ("${consultationId}") is out of sync with localStorage ("${currentIdInStorage}"). Resetting component's ID.`);
+        // This will trigger this effect to re-run.
+        // On the next run, consultationId state will be null, currentIdInStorage might be null or the new one.
+        // If currentIdInStorage is also null, it will fall into the standard disconnect path.
+        if (isActive) { // Check isActive before calling setState from effect
+          setConsultationId(null);
+        }
+      } else {
+         logger.debug(`SSE Effect: No valid consultationId for connection. State: "${consultationId}", Storage: "${currentIdInStorage}". Ensuring disconnection.`);
+      }
+
+      disconnectEventStream(); // Ensure disconnection
+      if (isActive) { // Check isActive before calling setState from effect
+        setSseConnected(false);
+        setIsReconnectingSse(false);
+      }
+      // Ensure localStorage is cleared if state is null or there was a mismatch
       if (typeof window !== 'undefined') {
         localStorage.removeItem('maisha_consultation_id');
       }
     }
-    
+
     return () => {
       isActive = false;
       logger.info('Effect: Cleaning up SSE connection on unmount or consultationId change.');
-      disconnectEventStream(); 
-      setSseConnected(false);
-      setIsReconnectingSse(false);
+      disconnectEventStream();
+      // Setting state in cleanup can be problematic if component is unmounting
+      // setSseConnected(false);
+      // setIsReconnectingSse(false);
     };
-  }, [consultationId]);
+  }, [consultationId, handleWorkflowEvent, handleSseError, handleSseOpen]);
 
   const handleSendMessage = async (messageTextOverride?: string) => {
     const textToSend = messageTextOverride || inputMessage;
@@ -395,6 +410,18 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     try {
       const response: ChatResponse = await sendMessage(textToSend, selectedFile || undefined);
 
+      // After sendMessage, the service might have set a new ID in localStorage.
+      // We need to update our component's state to match it.
+      const newIdFromStorage = getStoredConsultationId();
+      if (newIdFromStorage && newIdFromStorage !== consultationId) {
+        logger.info(`handleSendMessage: Consultation ID updated in storage to "${newIdFromStorage}". Updating component state.`);
+        setConsultationId(newIdFromStorage); // This will trigger the SSE useEffect
+      } else if (!newIdFromStorage && consultationId) {
+        // Storage ID was cleared (e.g. 404), but component state still has old ID
+        logger.warn(`handleSendMessage: Consultation ID cleared in storage. Resetting component state.`);
+        setConsultationId(null); // This will trigger the SSE useEffect to disconnect
+      }
+
       if (response._isBackgroundProcessing) {
         logger.info('handleSendMessage: Background processing signaled.');
         setIsSending(false);
@@ -403,6 +430,10 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
             message: response.next_steps || 'Processing your request...',
             workflowName: response.stage
         }, 0);
+        // Do not reset isLoading if we are expecting more SSE events for this stage
+        if (!response.stage?.includes('processing')) { // Example condition
+             setIsLoading(false);
+        }
         return;
       }
       
@@ -426,6 +457,13 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
 
     } catch (error: any) {
       logger.error('handleSendMessage: Error:', error);
+
+      // Check if the error implies the consultation ID was invalid
+      if (error.message && error.message.toLowerCase().includes('consultation not found')) {
+        logger.warn('handleSendMessage: Error indicates consultation not found. Clearing ID state.');
+        setConsultationId(null); // Ensure component state is also cleared
+      }
+
       addMessage({
         id: Date.now().toString() + '-err-send',
         text: error.message || "Sorry, an error occurred. Please try again.",
@@ -518,13 +556,17 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   };
 
   const handleGenerateRequisition = async () => {
-    if (!consultationId) {
+    const currentId = consultationId || getStoredConsultationId();
+    if (!currentId) {
         setWorkflowStatusWithTimeout({
           type: 'error', 
           message: 'No active consultation for requisition.'
         });
       return;
     }
+    // Ensure component state is updated if we relied on storage
+    if (!consultationId && currentId) setConsultationId(currentId);
+
     setIsLoading(true);
     setWorkflowStatusWithTimeout({ 
       type: 'loading', 
@@ -552,6 +594,9 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
           type: 'error', 
           message: error.message || 'Could not fetch requisition data.'
         });
+         if (error.message && error.message.toLowerCase().includes('consultation not found')) {
+            setConsultationId(null);
+         }
     } finally {
         setIsLoading(false);
     }
@@ -883,13 +928,7 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
                 <div className={`w-2 h-2 rounded-full ${
                   sseConnected ? 'bg-green-400' : 'bg-amber-400 animate-pulse'
                 }`} />
-                <span>{sseConnected ? 'Connected' : 'Connecting...'}</span>
-              </div>
-            )}
-            {isReconnectingSse && (
-              <div className="flex items-center gap-1 text-xs bg-white/20 px-2 py-1 rounded-full">
-                <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-                <span>Reconnecting...</span>
+                <span>{sseConnected ? 'Connected' : (isReconnectingSse ? 'Reconnecting' : 'Connecting...') }</span>
               </div>
             )}
             {canShowFinalizeButton && (
@@ -1002,22 +1041,17 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={canShowFileUpload ? "Type message or upload results..." : "Type your message..."}
+            placeholder={isRecording ? "Recording..." : (consultationType === 'voice' ? "Or type your message..." : "Type your message...")}
             className="flex-1 border border-input bg-background rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring min-h-[44px] max-h-[100px] leading-snug disabled:bg-muted disabled:cursor-not-allowed font-jost text-foreground placeholder:text-muted-foreground"
             rows={1}
-            disabled={isInputDisabled || (consultationType === 'voice' && isRecording)} 
+            disabled={isInputDisabled || isRecording} 
           />
           <button
             onClick={() => handleSendMessage()}
             disabled={isInputDisabled || (!inputMessage.trim() && !selectedFile)}
-            title="Send Message"
             className="bg-primary text-primary-foreground p-3 rounded-full hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center aspect-square font-jost"
           >
-            {isSending ? (
-              <ThreeDots height={20} width={20} color="currentColor" />
-            ) : (
-              <Send size={20} />
-            )}
+            <Send size={20} />
           </button>
         </div>
       </div>

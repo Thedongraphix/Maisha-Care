@@ -1,50 +1,81 @@
-event: messagedata: {"consultation_id":"507095e3-443a-42c0-8812-d5d3c23a333c","event_type":"WORKFLOW_PROGRESS","workflow_name":"connection","message":"Connected to consultation. Current stage: initial_chat","timestamp":"2025-05-27T15:14:29.454239"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:14:39.456492", "connection_duration": "0:00:10.001395", "last_activity": "0:00:10.001394"}
+event: message
+data: {"consultation_id":"507095e3-443a-42c0-8812-d5d3c23a333c","event_type":"WORKFLOW_PROGRESS","workflow_name":"connection","message":"Connected to consultation. Current stage: initial_chat","timestamp":"2025-05-27T15:14:29.454239"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:14:39.456492", "connection_duration": "0:00:10.001395", "last_activity": "0:00:10.001394"}
 : ping - 2025-05-27 15:14:44.454943+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:14:49.458192", "connection_duration": "0:00:20.003095", "last_activity": "0:00:20.003094"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:14:49.458192", "connection_duration": "0:00:20.003095", "last_activity": "0:00:20.003094"}
 : ping - 2025-05-27 15:14:59.455975+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:14:59.459660", "connection_duration": "0:00:30.004563", "last_activity": "0:00:30.004562"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:09.460763", "connection_duration": "0:00:40.005666", "last_activity": "0:00:40.005665"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:14:59.459660", "connection_duration": "0:00:30.004563", "last_activity": "0:00:30.004562"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:09.460763", "connection_duration": "0:00:40.005666", "last_activity": "0:00:40.005665"}
 : ping - 2025-05-27 15:15:14.456616+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:19.462694", "connection_duration": "0:00:50.007597", "last_activity": "0:00:50.007596"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:19.462694", "connection_duration": "0:00:50.007597", "last_activity": "0:00:50.007596"}
 : ping - 2025-05-27 15:15:29.457860+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:29.464576", "connection_duration": "0:01:00.009479", "last_activity": "0:01:00.009478"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:39.466153", "connection_duration": "0:01:10.011056", "last_activity": "0:01:10.011055"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:29.464576", "connection_duration": "0:01:00.009479", "last_activity": "0:01:00.009478"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:39.466153", "connection_duration": "0:01:10.011056", "last_activity": "0:01:10.011055"}
 : ping - 2025-05-27 15:15:44.460266+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:49.467136", "connection_duration": "0:01:20.012039", "last_activity": "0:01:20.012038"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:49.467136", "connection_duration": "0:01:20.012039", "last_activity": "0:01:20.012038"}
 : ping - 2025-05-27 15:15:59.461486+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:59.468136", "connection_duration": "0:01:30.013039", "last_activity": "0:01:30.013038"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:09.470003", "connection_duration": "0:01:40.014906", "last_activity": "0:01:40.014905"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:15:59.468136", "connection_duration": "0:01:30.013039", "last_activity": "0:01:30.013038"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:09.470003", "connection_duration": "0:01:40.014906", "last_activity": "0:01:40.014905"}
 : ping - 2025-05-27 15:16:14.462859+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:19.471611", "connection_duration": "0:01:50.016514", "last_activity": "0:01:50.016513"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:19.471611", "connection_duration": "0:01:50.016514", "last_activity": "0:01:50.016513"}
 : ping - 2025-05-27 15:16:29.463372+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:29.474041", "connection_duration": "0:02:00.018944", "last_activity": "0:02:00.018943"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:39.475418", "connection_duration": "0:02:10.020321", "last_activity": "0:02:10.020320"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:29.474041", "connection_duration": "0:02:00.018944", "last_activity": "0:02:00.018943"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:39.475418", "connection_duration": "0:02:10.020321", "last_activity": "0:02:10.020320"}
 : ping - 2025-05-27 15:16:44.463859+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:49.476838", "connection_duration": "0:02:20.021741", "last_activity": "0:02:20.021740"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:49.476838", "connection_duration": "0:02:20.021741", "last_activity": "0:02:20.021740"}
 : ping - 2025-05-27 15:16:59.464811+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:59.477798", "connection_duration": "0:02:30.022701", "last_activity": "0:02:30.022700"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:09.479230", "connection_duration": "0:02:40.024133", "last_activity": "0:02:40.024132"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:16:59.477798", "connection_duration": "0:02:30.022701", "last_activity": "0:02:30.022700"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:09.479230", "connection_duration": "0:02:40.024133", "last_activity": "0:02:40.024132"}
 : ping - 2025-05-27 15:17:14.465471+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:19.481352", "connection_duration": "0:02:50.026255", "last_activity": "0:02:50.026254"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:19.481352", "connection_duration": "0:02:50.026255", "last_activity": "0:02:50.026254"}
 : ping - 2025-05-27 15:17:29.466552+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:29.482403", "connection_duration": "0:03:00.027306", "last_activity": "0:03:00.027305"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:39.483763", "connection_duration": "0:03:10.028666", "last_activity": "0:03:10.028665"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:29.482403", "connection_duration": "0:03:00.027306", "last_activity": "0:03:00.027305"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:39.483763", "connection_duration": "0:03:10.028666", "last_activity": "0:03:10.028665"}
 : ping - 2025-05-27 15:17:44.467289+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:49.485142", "connection_duration": "0:03:20.030045", "last_activity": "0:03:20.030044"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:49.485142", "connection_duration": "0:03:20.030045", "last_activity": "0:03:20.030044"}
 : ping - 2025-05-27 15:17:59.467858+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:59.487991", "connection_duration": "0:03:30.032894", "last_activity": "0:03:30.032893"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:09.490249", "connection_duration": "0:03:40.035152", "last_activity": "0:03:40.035151"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:17:59.487991", "connection_duration": "0:03:30.032894", "last_activity": "0:03:30.032893"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:09.490249", "connection_duration": "0:03:40.035152", "last_activity": "0:03:40.035151"}
 : ping - 2025-05-27 15:18:14.468529+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:19.491606", "connection_duration": "0:03:50.036509", "last_activity": "0:03:50.036508"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:19.491606", "connection_duration": "0:03:50.036509", "last_activity": "0:03:50.036508"}
 : ping - 2025-05-27 15:18:29.469510+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:29.492541", "connection_duration": "0:04:00.037444", "last_activity": "0:04:00.037443"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:39.496310", "connection_duration": "0:04:10.041213", "last_activity": "0:04:10.041212"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:29.492541", "connection_duration": "0:04:00.037444", "last_activity": "0:04:00.037443"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:39.496310", "connection_duration": "0:04:10.041213", "last_activity": "0:04:10.041212"}
 : ping - 2025-05-27 15:18:44.471640+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:49.498479", "connection_duration": "0:04:20.043382", "last_activity": "0:04:20.043381"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:49.498479", "connection_duration": "0:04:20.043382", "last_activity": "0:04:20.043381"}
 : ping - 2025-05-27 15:18:59.472925+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:59.499825", "connection_duration": "0:04:30.044728", "last_activity": "0:04:30.044727"}
-event: messagedata: {"consultation_id":"507095e3-443a-42c0-8812-d5d3c23a333c","event_type":"WORKFLOW_PROGRESS","workflow_name":"connection","message":"Connection will timeout soon. Please save your work.","timestamp":"2025-05-27T15:18:59.500433"}
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:19:09.501657", "connection_duration": "0:00:10.001100", "last_activity": "0:04:40.046559"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:18:59.499825", "connection_duration": "0:04:30.044728", "last_activity": "0:04:30.044727"}
+event: message
+data: {"consultation_id":"507095e3-443a-42c0-8812-d5d3c23a333c","event_type":"WORKFLOW_PROGRESS","workflow_name":"connection","message":"Connection will timeout soon. Please save your work.","timestamp":"2025-05-27T15:18:59.500433"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:19:09.501657", "connection_duration": "0:00:10.001100", "last_activity": "0:04:40.046559"}
 : ping - 2025-05-27 15:19:14.473429+00:00
-event: pingdata: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:19:19.508689", "connection_duration": "0:00:20.008132", "last_activity": "0:04:50.053591"}
+event: ping
+data: {"consultation_id": "507095e3-443a-42c0-8812-d5d3c23a333c", "timestamp": "2025-05-27T15:19:19.508689", "connection_duration": "0:00:20.008132", "last_activity": "0:04:50.053591"}
