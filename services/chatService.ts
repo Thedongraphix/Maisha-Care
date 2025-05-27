@@ -5,10 +5,12 @@ const API_BASE_URL = '/api/proxy';
 
 // API response types from integration.md
 export interface ChatResponse {
-  consultation_id: string;
+  consultation_id: string | null; // Can be null if error before ID established
   message: string;
   stage: string;
   next_steps?: string;
+  status_detail?: 'file_processing_initiated' | 'ai_response_timeout' | string; // For proxy signals
+  _isBackgroundProcessing?: boolean; // Internal flag for ActiveConsultation to manage UI
 }
 
 export interface WorkflowEvent {
@@ -58,15 +60,14 @@ const setConsultationId = (id: string): void => {
  * Modified to handle long-running file processing
  */
 export async function sendMessage(messageText: string, fileToUpload?: File): Promise<ChatResponse> {
-  logger.debug('Sending message to API:', messageText, fileToUpload ? `with file: ${fileToUpload.name}` : '');
-  const consultationId = getConsultationId();
-  logger.debug('Using consultation ID:', consultationId);
+  logger.debug('chatService.sendMessage:', { messageText, fileName: fileToUpload?.name });
+  const currentConsultationId = getConsultationId();
   
   const formData = new FormData();
   formData.append('message', messageText);
 
-  if (consultationId) {
-    formData.append('consultation_id', consultationId);
+  if (currentConsultationId) {
+    formData.append('consultation_id', currentConsultationId);
   }
 
   if (fileToUpload) {
@@ -74,74 +75,95 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
   }
 
   try {
-    // Set a reasonable timeout for the initial request
+    // This timeout is client-to-OUR-chat-proxy.
+    // The proxy itself has a timeout for communication with the AI_BASE_URL.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const clientToProxyTimeoutId = setTimeout(() => {
+        logger.warn('chatService: Timeout sending request to our Next.js proxy /api/proxy/chat');
+        controller.abort('ClientToProxyTimeout');
+    }, 35000); // e.g., 35s, slightly longer than AI_RESPONSE_TIMEOUT in proxy
 
-    const response = await fetch(`${API_BASE_URL}/chat`, {
+    const response = await fetch(`${API_BASE_URL}/chat`, { // API_BASE_URL is /api/proxy
       method: 'POST',
       body: formData,
       signal: controller.signal,
     });
 
-    clearTimeout(timeoutId);
-    logger.debug('API response status:', response.status);
+    clearTimeout(clientToProxyTimeoutId);
+    logger.debug(`chatService: Proxy response status: ${response.status}`);
+
+    const data: ChatResponse = await response.json();
+    logger.debug('chatService: Received data from proxy:', data);
+
+    // Always update consultation ID if received, regardless of status
+    if (data.consultation_id && data.consultation_id !== currentConsultationId) {
+      setConsultationId(data.consultation_id);
+      logger.info(`chatService: Consultation ID updated to ${data.consultation_id}`);
+    } else if (data.consultation_id && !currentConsultationId) {
+      setConsultationId(data.consultation_id);
+      logger.info(`chatService: New consultation ID set: ${data.consultation_id}`);
+    }
+
+
+    if (response.status === 202) {
+      // Proxy signaled background processing (file upload or AI thinking timeout)
+      return {
+        ...data, // Contains consultation_id, stage, next_steps, status_detail
+        message: '', // Ensure no message is displayed in chat log for this
+        _isBackgroundProcessing: true 
+      };
+    }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: `HTTP error: ${response.status}` }));
-      
-      if (response.status === 404 && errorData.detail && errorData.detail.toLowerCase().includes('consultation not found')) {
-        logger.warn('Consultation not found on server. Clearing local ID.');
+      // Handle errors relayed from the AI backend by the proxy (e.g., 4xx, 5xx)
+      const errorDetail = (data as any).detail || `Error from AI service: ${response.status}`;
+      logger.error(`chatService: Error from proxy/AI: ${errorDetail}`);
+      if (response.status === 404 && errorDetail.toLowerCase().includes('consultation not found')) {
+        logger.warn('chatService: Consultation not found on server. Clearing local ID.');
         if (typeof window !== 'undefined') {
           localStorage.removeItem('maisha_consultation_id');
         }
       }
-      throw new Error(errorData.detail || `Error: ${response.status}`);
+      throw new Error(errorDetail);
     }
 
-    const data: ChatResponse = await response.json();
-    logger.debug('Received response from API:', data);
-
-    if (data.consultation_id) {
-      setConsultationId(data.consultation_id);
-    }
-
+    // This is a direct, successful response from the AI via the proxy (HTTP 200)
     return data;
+
   } catch (error: any) {
-    // Handle abort/timeout specially
-    if (error.name === 'AbortError') {
-      logger.warn('Request timed out, but processing may continue on server');
-      
-      // Return a special response indicating processing is happening
+    logger.error('chatService.sendMessage: CATCH block error:', error);
+    if (error.message === 'ClientToProxyTimeout') {
+      logger.warn('chatService: Request to Next.js proxy timed out.');
       return {
-        consultation_id: consultationId || '',
-        message: fileToUpload 
-          ? "I'm analyzing your test results. This may take a few minutes. I'll notify you when the analysis is complete."
-          : "Processing your request...",
-        stage: 'processing',
-        next_steps: 'Please wait while I analyze the information...'
+        consultation_id: currentConsultationId, // Use existing ID
+        message: '', 
+        stage: 'processing_error', // Indicate a local problem
+        next_steps: 'Experiencing connection issues. Please wait or try again.',
+        _isBackgroundProcessing: true, // Let UI show a persistent status
+        status_detail: 'client_proxy_timeout'
       };
     }
-    
-    logger.error('Error sending message to API:', error);
+    // For other errors (network, JSON parsing, etc.)
     throw error instanceof Error ? error : new Error('Failed to communicate with the AI service');
   }
 }
 
 let eventSource: EventSource | null = null;
-let reconnectAttempt = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;
-const BASE_RECONNECT_DELAY = 1000;
+export let reconnectAttempt = 0; // Export for potential read-only access if needed, though direct use is discouraged
+export const MAX_RECONNECT_ATTEMPTS = 5;
+const BASE_RECONNECT_DELAY = 2000;
 const MAX_RECONNECT_DELAY = 30000;
-let connectionStartTime = Date.now();
-let proactiveReconnectTimer: NodeJS.Timeout | null = null;
 
 function getBackoffTime(): number {
   if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
     logger.error("SSE: Max reconnection attempts reached.");
     return -1; // Indicate no more retries
   }
-  const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempt), MAX_RECONNECT_DELAY);
+  // Exponential backoff with jitter
+  const delay = Math.min(
+    BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempt) + Math.random() * 1000, 
+    MAX_RECONNECT_DELAY
+  );
   reconnectAttempt++;
   return delay;
 }
@@ -157,102 +179,120 @@ function resetBackoff(): void {
  */
 export const connectToEventStream = (
   onEvent: (event: WorkflowEvent) => void,
-  onError?: (error: Event) => void
+  onError?: (error: Event) => void,
+  onOpen?: () => void
 ) => {
-  if (eventSource) {
-    logger.info('Closing existing SSE connection before creating new one');
-    eventSource.close();
+  if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
+    logger.info('SSE: connectToEventStream called while connection already open or connecting. Closing existing one first.');
+    eventSource.close(); // This should trigger its onerror if it was open, then our logic continues
+    eventSource = null;
   }
 
   const consultationId = getConsultationId();
   if (!consultationId) {
-    logger.warn('No consultation ID found for SSE connection');
+    logger.warn('SSE: No consultation ID, cannot connect.');
+    if (onError) onError(new Event('NoConsultationID'));
     return;
   }
 
   const url = `${API_BASE_URL}/consultation/${consultationId}/events`;
-  logger.info('Connecting to SSE:', url);
+  logger.info(`SSE: Attempting to connect to: ${url} (Attempt: ${reconnectAttempt + 1})`);
   
   try {
     eventSource = new EventSource(url);
-    connectionStartTime = Date.now();
     
     eventSource.onopen = () => {
-      logger.info('SSE connection opened successfully');
-      resetBackoff();
+      logger.info('SSE: Connection opened successfully.');
+      resetBackoff(); // Reset attempts on successful opening
+      if (onOpen) onOpen();
     };
 
-    eventSource.onmessage = (event) => {
+    eventSource.onmessage = (event: MessageEvent) => {
+      // Raw comment pings from server (e.g., ": ping - ...") are not delivered here by EventSource.
+      // They are comments in the SSE protocol.
+      // EventSource only delivers messages that start with "data:", "id:", or "event:".
       try {
         const eventData: WorkflowEvent = JSON.parse(event.data);
-        logger.info('SSE message event received:', eventData);
-        
-        // Handle timeout warning specially
-        if (eventData.workflow_name === 'connection' && 
-            eventData.message?.includes('timeout soon')) {
-          logger.warn('SSE connection timeout warning received');
-          // Could trigger a proactive reconnect here if needed
-        }
-        
+        // logger.debug('SSE: Message event (event.data):', event.data);
         onEvent(eventData);
       } catch (error) {
-        logger.error('Error parsing SSE event:', error);
+        logger.error('SSE: Error parsing non-JSON data in onmessage or malformed WorkflowEvent JSON:', { data: event.data, error });
+        // It's possible the server sends a non-JSON string as a "message" event.
+        // If so, onEvent should be prepared or we should filter here.
+        // For now, we assume valid WorkflowEvent JSON for "message" events.
       }
     };
+    
+    eventSource.addEventListener('ping', (event: MessageEvent) => {
+        // This handles events explicitly named "ping" by the server: `event: ping\ndata: {...}\n\n`
+        try {
+            const pingData = JSON.parse(event.data); // As per your example, ping data is JSON
+            logger.debug('SSE: Received named "ping" event with data:', pingData);
+            // Can be used to confirm liveness if needed.
+        } catch (error) {
+            logger.error('SSE: Error parsing JSON data for named "ping" event:', { data: event.data, error });
+        }
+    });
 
-    eventSource.onerror = (error) => {
-      logger.error('SSE connection error:', error);
-      logger.info(`SSE readyState: ${eventSource?.readyState}`);
+    eventSource.onerror = (errorEvent: Event) => {
+      logger.error('SSE: Connection error occurred.', { errorEvent, readyState: eventSource?.readyState });
       
       if (onError) {
-        onError(error);
+        onError(errorEvent); // Notify the component immediately
       }
       
-      // Add automatic reconnection logic with backoff
-      if (eventSource?.readyState === EventSource.CLOSED) {
+      // If the EventSource is closed, it means the connection is truly gone.
+      // This could be due to the 5-min server timeout, network error, SSL error during close, etc.
+      if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+        const currentEventSourceInstance = eventSource; // Capture instance before nulling
+        eventSource = null; // Important: nullify to allow new EventSource creation
+
+        // Prevent event listeners from being called on the old, closed instance
+        currentEventSourceInstance.onopen = null;
+        currentEventSourceInstance.onmessage = null;
+        currentEventSourceInstance.onerror = null;
+        currentEventSourceInstance.removeEventListener('ping', ()=>{}); // Crude way to remove, better to store handler
+
+
         const backoffTime = getBackoffTime();
         if (backoffTime > 0) {
-          logger.info(`SSE connection closed, attempting to reconnect in ${backoffTime}ms...`);
+          logger.info(`SSE: Connection closed. Attempting to reconnect in ${backoffTime}ms (attempt ${reconnectAttempt} of ${MAX_RECONNECT_ATTEMPTS})...`);
           setTimeout(() => {
-            if (getConsultationId()) {
-              connectToEventStream(onEvent, onError);
+            // Check if a consultation is still active and no new EventSource has been created in the meantime
+            if (getConsultationId() && !eventSource) { 
+              connectToEventStream(onEvent, onError, onOpen);
+            } else {
+              logger.info('SSE: Reconnection aborted; consultation ID changed or new EventSource already active.');
             }
           }, backoffTime);
         } else {
-          logger.error('Max reconnection attempts reached for SSE');
+          logger.error('SSE: Max reconnection attempts reached. Giving up on automatic reconnections.');
+          if (onError) onError(new Event('MaxRetriesReached')); 
         }
+      } else {
+        // If readyState is CONNECTING, the browser is likely handling retries internally.
+        // If readyState is OPEN but an error occurred, it might be a non-fatal issue.
+        logger.warn('SSE: Error event received, but connection not in CLOSED state. Current readyState: ' + eventSource?.readyState);
       }
     };
-
-    // Handle ping events - these come as a separate event type
-    eventSource.addEventListener('ping', (event: MessageEvent) => {
-      try {
-        const pingData = JSON.parse(event.data);
-        logger.debug('SSE ping received:', pingData);
-        
-        // Log connection health
-        if (pingData.connection_duration) {
-          logger.debug(`Connection healthy - Duration: ${pingData.connection_duration}, Last activity: ${pingData.last_activity}`);
-        }
-      } catch (error) {
-        logger.error('Error parsing ping event:', error);
-      }
-    });
     
-    // Log connection duration periodically
-    const logInterval = setInterval(() => {
-      if (eventSource && eventSource.readyState === EventSource.OPEN) {
-        const duration = Date.now() - connectionStartTime;
-        logger.debug(`SSE connection alive for ${Math.floor(duration / 1000)}s`);
-      } else {
-        clearInterval(logInterval);
-      }
-    }, 30000); // Log every 30 seconds
-    
-  } catch (error) {
-    logger.error('Failed to create EventSource:', error);
+  } catch (error) { // This catches errors during `new EventSource(url)`
+    logger.error('SSE: Failed to create EventSource instance:', error);
     if (onError) {
-      onError(new Event('connection-failed'));
+      onError(new Event('EventSourceCreationError'));
+    }
+    // Attempt retry if EventSource creation itself fails
+    const backoffTime = getBackoffTime();
+    if (backoffTime > 0) {
+        logger.info(`SSE: EventSource creation failed. Retrying in ${backoffTime}ms...`);
+        setTimeout(() => {
+            if (getConsultationId()) {
+                connectToEventStream(onEvent, onError, onOpen);
+            }
+        }, backoffTime);
+    } else {
+        logger.error('SSE: Max reconnection attempts for EventSource creation reached.');
+         if (onError) onError(new Event('MaxRetriesReachedEventSourceCreation'));
     }
   }
 };
@@ -262,17 +302,16 @@ export const connectToEventStream = (
  */
 export function disconnectEventStream(): void {
   if (eventSource) {
-    logger.info('SSE: Disconnecting...');
+    logger.info('SSE: Intentionally disconnecting event stream.');
+    // Remove listeners before closing to prevent them firing on the old instance during close
+    eventSource.onopen = null;
+    eventSource.onmessage = null;
+    eventSource.onerror = null;
+    // eventSource.removeEventListener('ping', specificPingHandler); // If you store the handler
     eventSource.close();
     eventSource = null;
-    resetBackoff();
-    
-    // Clear proactive reconnect timer
-    if (proactiveReconnectTimer) {
-      clearTimeout(proactiveReconnectTimer);
-      proactiveReconnectTimer = null;
-    }
   }
+  resetBackoff(); 
 }
 
 /**

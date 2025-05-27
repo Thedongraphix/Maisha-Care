@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import logger from '@/utils/logger'; // Import the logger
 
 // Configure maximum duration for this function (60 seconds for Pro plan)
 export const maxDuration = 60;
@@ -7,58 +8,57 @@ export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 const API_BASE_URL = 'https://v2deployment-production.up.railway.app';
+const AI_RESPONSE_TIMEOUT = 28000; // 28 seconds for AI to respond to a regular message
 
 /**
  * Handle POST requests to the chat endpoint
  */
 export async function POST(request: NextRequest) {
-  let backendFormData: FormData | undefined;
-  let consultationId: FormDataEntryValue | null = null;
-  
+  let clientConsultationId: string | null = null;
   try {
     const formData = await request.formData();
-    
-    // Extract consultation_id early in case we need it for error handling
-    consultationId = formData.get('consultation_id');
-    
-    // Create a new FormData instance for the backend
-    backendFormData = new FormData();
-    
-    // Copy all fields from the incoming form data
+    clientConsultationId = formData.get('consultation_id') as string | null;
+
+    const backendFormData = new FormData();
     const entries = Array.from(formData.entries());
     for (const [key, value] of entries) {
       backendFormData.append(key, value);
     }
     
-    // For file uploads, return immediately with a processing response
-    // The actual response will come through SSE
     const hasFile = formData.has('file');
     
-    if (hasFile && consultationId) {
-      // Send the file to backend but don't wait for the full response
+    if (hasFile) {
+      logger.info(`Chat Proxy: File upload detected for consultation: ${clientConsultationId}. Sending to backend non-blockingly.`);
+      // Send to backend but don't wait for the full response from the AI here.
+      // The AI backend itself should handle the file and then trigger SSE events.
       fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         body: backendFormData,
+        // Consider a short timeout for this fetch if the backend /chat for files is also quick to acknowledge
       }).catch(error => {
-        console.error('Background file upload error:', error);
+        // Log error, but the client has already received a 202.
+        logger.error('Chat Proxy: Background file upload to AI backend failed:', error);
       });
       
-      // Return immediately with a processing message
-      return new Response(JSON.stringify({
-        consultation_id: consultationId.toString(),
-        message: "I've received your test results and I'm analyzing them now. This typically takes 2-4 minutes. I'll notify you as soon as the analysis is complete.",
-        stage: 'processing',
-        next_steps: 'Please wait while I analyze your test results...'
-      }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      // Return 202 Accepted: Client should now wait for SSE events for test_analysis workflow
+      return NextResponse.json({
+        consultation_id: clientConsultationId,
+        status_detail: 'file_processing_initiated',
+        message: '', // No direct message for chat UI
+        stage: 'processing_file', // A more specific stage for client UI
+        next_steps: 'Your file is being analyzed. I will notify you.'
+      }, { status: 202 });
     }
     
-    // For regular messages, wait for the response
+    // For regular messages, wait for the AI response but with a timeout
+    logger.info(`Chat Proxy: Regular message for consultation: ${clientConsultationId}. Awaiting AI response.`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s for regular messages
+    const timeoutId = setTimeout(() => {
+      logger.warn(`Chat Proxy: AI response timeout for consultation: ${clientConsultationId}`);
+      controller.abort();
+    }, AI_RESPONSE_TIMEOUT);
     
-    const response = await fetch(`${API_BASE_URL}/chat`, {
+    const aiResponse = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
       body: backendFormData,
       signal: controller.signal,
@@ -66,42 +66,32 @@ export async function POST(request: NextRequest) {
     
     clearTimeout(timeoutId);
     
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: `HTTP error: ${response.status}` }));
-      return new Response(JSON.stringify(errorData), {
-        status: response.status,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    if (!aiResponse.ok) {
+      const errorData = await aiResponse.json().catch(() => ({ detail: `AI backend HTTP error: ${aiResponse.status}` }));
+      logger.error(`Chat Proxy: AI backend returned error ${aiResponse.status}:`, errorData);
+      return NextResponse.json(errorData, { status: aiResponse.status });
     }
     
-    const data = await response.json();
-    
-    return new Response(JSON.stringify(data), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const data = await aiResponse.json();
+    logger.info(`Chat Proxy: Received direct AI response for ${clientConsultationId}:`, data);
+    return NextResponse.json(data);
     
   } catch (error: any) {
-    console.error('Chat proxy error:', error);
+    logger.error('Chat Proxy: Error in POST handler:', error);
     
-    // Handle timeout specially
     if (error.name === 'AbortError') {
-      // Use the consultation_id we extracted earlier
-      const id = consultationId || '';
-      
-      return new Response(JSON.stringify({
-        consultation_id: id.toString(),
-        message: "Processing your request. You'll receive a notification when complete.",
-        stage: 'processing',
-        next_steps: 'Please wait...'
-      }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      // This means the AI_RESPONSE_TIMEOUT was hit for a regular message
+      logger.warn(`Chat Proxy: AbortError (AI timeout) for consultation: ${clientConsultationId}`);
+      return NextResponse.json({
+        consultation_id: clientConsultationId,
+        status_detail: 'ai_response_timeout',
+        message: '', // No direct message for chat UI
+        stage: 'processing_message', // A stage to indicate AI is still thinking
+        next_steps: 'The AI is taking a moment to process your request...'
+      }, { status: 202 }); // 202 Accepted, client should expect SSE
     }
     
-    return new Response(JSON.stringify({ detail: 'Internal server error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return NextResponse.json({ detail: 'Chat proxy internal server error' }, { status: 500 });
   }
 }
 

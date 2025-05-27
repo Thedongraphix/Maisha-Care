@@ -9,6 +9,8 @@ import {
   ChatResponse,
   WorkflowEvent,
   TestRequisitionData, 
+  reconnectAttempt,
+  MAX_RECONNECT_ATTEMPTS
 } from '@/services/chatService';
 import { resetChatState, getConsultationId as getStoredConsultationId } from '@/utils/consultationUtils';
 import logger from '@/utils/logger';
@@ -62,7 +64,7 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const [showRequisitionButton, setShowRequisitionButton] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isReconnectingSse, setIsReconnectingSse] = useState(false);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string>('');
   const [showPdfModal, setShowPdfModal] = useState(false);
@@ -75,6 +77,10 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   };
 
   useEffect(scrollToBottom, [messages]);
+
+  const addMessage = useCallback((message: Message, addToTop = false) => {
+    setMessages(prev => addToTop ? [message, ...prev] : [...prev, message]);
+  }, []);
 
   useEffect(() => {
     const storedId = getStoredConsultationId();
@@ -94,107 +100,113 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         timestamp: createTimestamp(), 
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
-
-  const addMessage = (message: Message, addToTop = false) => {
-    setMessages(prev => addToTop ? [message, ...prev] : [...prev, message]);
-  };
+  }, [addMessage]); 
 
   // Add state to track SSE connection status
   const [sseConnected, setSseConnected] = useState(false);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const connectionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Add state for tracking file processing
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const fileProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleWorkflowEvent = useCallback((eventData: WorkflowEvent) => {
-    logger.info('SSE Event Received:', eventData);
+  const handleSseOpen = useCallback(() => {
+    logger.info('SSE connection opened callback triggered.');
+    setSseConnected(true);
+    setIsReconnectingSse(false);
+    // Clear any "reconnecting" or "connection issue" status messages
+    setWorkflowStatus(prev => {
+        if (prev && (prev.message.includes('Reconnecting') || prev.message.includes('Connection issues') || prev.message.includes('Failed to connect'))) {
+            return null;
+        }
+        return prev;
+    });
+  }, []);
+
+  const handleSseError = useCallback((error: Event) => {
+    logger.error('SSE Connection Error callback in ActiveConsultation:', error);
+    setSseConnected(false);
     
-    if (isReconnecting) {
-      setIsReconnecting(false);
-      setSseConnected(true);
-    }
+    // We can't directly access reconnectAttempt from chatService here without causing prop drilling or context.
+    // The UI will show a generic reconnecting message.
+    // chatService's onError will be called, and it handles the backoff.
+    // If chatService emits a specific 'MaxRetriesReached' event, we could handle it here.
+    setIsReconnectingSse(true); 
+    setWorkflowStatus({
+      type: 'info', 
+      message: 'Connection to real-time updates lost. Attempting to reconnect...',
+      workflowName: 'connection'
+    });
+  }, []);
+
+  const handleWorkflowEvent = useCallback((eventData: WorkflowEvent) => {
+    logger.info('handleWorkflowEvent: Received SSE:', eventData);
     
     if (eventData.consultation_id !== consultationId) {
-        logger.warn('SSE Event for different consultation ID received, ignoring.', { current: consultationId, event: eventData.consultation_id });
+        logger.warn('SSE Event for different consultation ID received, ignoring.');
         return;
     }
 
-    // Handle connection-specific messages
     if (eventData.workflow_name === 'connection') {
       if (eventData.message?.includes('Connected to consultation')) {
-        logger.info('SSE connection established to consultation');
+        logger.info('SSE: Connection message processed.');
         setSseConnected(true);
-        setIsReconnecting(false);
-        
+        setIsReconnectingSse(false);
         const stageMatch = eventData.message.match(/Current stage: (\w+)/);
-        if (stageMatch) {
-          const stage = stageMatch[1];
-          setCurrentStage(stage);
-          logger.info(`Current stage from SSE: ${stage}`);
+        if (stageMatch && stageMatch[1]) {
+          setCurrentStage(stageMatch[1]);
+          logger.info(`SSE: Current stage updated to: ${stageMatch[1]}`);
         }
+        setWorkflowStatus(prev => (prev?.message.includes("Reconnecting") || prev?.message.includes("Attempting to reconnect")) ? null : prev);
       } else if (eventData.message?.includes('timeout soon')) {
-        logger.warn('Connection timeout warning received');
+        logger.warn('SSE: Connection timeout warning received.');
         setWorkflowStatus({
           type: 'info',
-          message: 'Connection will timeout soon. Your progress is saved.',
+          message: eventData.message,
           workflowName: 'connection'
         });
-        return;
       }
+      return; 
     }
 
-    // Special handling for test analysis workflow
     if (eventData.workflow_name === 'test_analysis') {
       if (eventData.event_type === 'WORKFLOW_START') {
-        setIsProcessingFile(true);
+        setIsProcessingFile(true); 
         setWorkflowStatus({
           type: 'loading',
-          message: 'Analyzing your test results. This may take a few minutes...',
+          message: eventData.message || 'Analyzing your test results...',
           workflowName: 'test_analysis'
         });
       } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
-        setIsProcessingFile(false);
-        setIsSending(false);
-        setIsLoading(false);
-        
-        // Add the analysis results to chat
-        addMessage({
-          id: Date.now().toString() + '-analysis',
-          text: eventData.message,
-          sender: 'assistant',
-          timestamp: new Date(eventData.timestamp),
-        });
-        
-        // Clear any file processing timeout
-        if (fileProcessingTimeoutRef.current) {
-          clearTimeout(fileProcessingTimeoutRef.current);
+        if (eventData.message) {
+          addMessage({
+            id: Date.now().toString() + '-analysis-result',
+            text: eventData.message,
+            sender: 'assistant',
+            timestamp: new Date(eventData.timestamp),
+            stage: 'diagnosis_pending' 
+          });
         }
-        
-        // Clear workflow status after showing the message
-        setTimeout(() => setWorkflowStatus(null), 3000);
-      } else if (eventData.event_type === 'WORKFLOW_ERROR') {
         setIsProcessingFile(false);
-        setIsSending(false);
-        setIsLoading(false);
-        
+        setIsLoading(false); 
+        setIsSending(false); 
+        setWorkflowStatus({type: 'success', message: 'Test analysis complete.', workflowName: 'test_analysis'});
+        if (fileProcessingTimeoutRef.current) clearTimeout(fileProcessingTimeoutRef.current);
+        setTimeout(() => setWorkflowStatus(null), 4000);
+      } else if (eventData.event_type === 'WORKFLOW_ERROR') {
         addMessage({
-          id: Date.now().toString() + '-error',
-          text: `Error analyzing test results: ${eventData.message}`,
+          id: Date.now().toString() + '-analysis-error',
+          text: `Error during test analysis: ${eventData.message}`,
           sender: 'system',
           timestamp: new Date(eventData.timestamp),
         });
-        
-        if (fileProcessingTimeoutRef.current) {
-          clearTimeout(fileProcessingTimeoutRef.current);
-        }
+        setIsProcessingFile(false);
+        setIsLoading(false);
+        setIsSending(false);
+        setWorkflowStatus({type: 'error', message: `Test analysis failed: ${eventData.message}`, workflowName: 'test_analysis'});
+        if (fileProcessingTimeoutRef.current) clearTimeout(fileProcessingTimeoutRef.current);
+        setTimeout(() => setWorkflowStatus(null), 7000);
       }
-      
-      // Don't process other workflow status updates for test_analysis
-      return;
+      return; 
     }
 
     let statusType: WorkflowStatus['type'] = 'info';
@@ -209,97 +221,54 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     });
 
     if (eventData.event_type === 'WORKFLOW_START' || eventData.event_type === 'WORKFLOW_PROGRESS') {
-      if (eventData.workflow_name !== 'connection') {
-        setIsLoading(true);
-      }
-    } else if (eventData.event_type === 'WORKFLOW_COMPLETE' || eventData.event_type === 'WORKFLOW_ERROR') {
+      setIsLoading(true); 
+    } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
       setIsLoading(false);
-      setIsSending(false);
-      setIsProcessingFile(false);
-      setTimeout(() => setWorkflowStatus(null), statusType === 'error' ? 7000 : 4000);
-    }
+      setIsSending(false); 
 
-    if (eventData.event_type === 'WORKFLOW_COMPLETE') {
-      if (eventData.workflow_name === 'test_recommendation') {
-        setShowRequisitionButton(true);
+      if (eventData.message) { 
         addMessage({
-          id: Date.now().toString() + '-workflow',
-          text: eventData.message,
-          sender: 'assistant',
-          timestamp: new Date(eventData.timestamp),
+            id: Date.now().toString() + '-workflow-' + eventData.workflow_name,
+            text: eventData.message,
+            sender: 'assistant', 
+            timestamp: new Date(eventData.timestamp),
+            stage: eventData.workflow_name 
         });
       }
-    }
-  }, [consultationId, isReconnecting]);
-
-  const handleSseError = useCallback((error: Event) => {
-    logger.error('SSE Connection Error:', error);
-    setSseConnected(false);
-    setIsReconnecting(true);
-    setWorkflowStatus({
-      type: 'info',
-      message: 'Reconnecting to server...'
-    });
-    
-    // Clear any existing reconnect timeout
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-    
-    // Schedule reconnection
-    reconnectTimeoutRef.current = setTimeout(() => {
-      if (consultationId) {
-        logger.info('Attempting to reconnect SSE...');
-        connectToEventStream(handleWorkflowEvent, handleSseError);
+      if (eventData.workflow_name === 'test_recommendation') {
+        setShowRequisitionButton(true);
       }
-    }, 2000);
-  }, [consultationId, handleWorkflowEvent]);
-
-  // Improved SSE connection effect
+      setTimeout(() => setWorkflowStatus(null), 4000);
+    } else if (eventData.event_type === 'WORKFLOW_ERROR') {
+        setIsLoading(false);
+        setIsSending(false);
+        if (eventData.message) {
+            addMessage({
+                id: Date.now().toString() + '-workflow-error-' + eventData.workflow_name,
+                text: `An issue occurred with ${eventData.workflow_name}: ${eventData.message}`,
+                sender: 'system',
+                timestamp: new Date(eventData.timestamp),
+            });
+        }
+        setTimeout(() => setWorkflowStatus(null), 7000);
+    }
+  }, [consultationId, addMessage]); 
+  
   useEffect(() => {
     let isActive = true;
-    
     const initializeSSE = () => {
       if (consultationId && isActive) {
-        logger.info(`Initializing SSE connection for consultation: ${consultationId}`);
-        connectToEventStream(handleWorkflowEvent, handleSseError);
-        setSseConnected(true);
-        
-        // Set up periodic connection check (every 4 minutes to beat 5-minute timeout)
-        if (connectionCheckIntervalRef.current) {
-          clearInterval(connectionCheckIntervalRef.current);
-        }
-        
-        connectionCheckIntervalRef.current = setInterval(() => {
-          if (isActive && consultationId) {
-            logger.info('Performing periodic SSE reconnection to prevent timeout...');
-            disconnectEventStream();
-            setTimeout(() => {
-              if (isActive && consultationId) {
-                connectToEventStream(handleWorkflowEvent, handleSseError);
-              }
-            }, 100);
-          }
-        }, 4 * 60 * 1000); // 4 minutes
+        logger.info(`Effect: Initializing SSE for consultation: ${consultationId}`);
+        connectToEventStream(handleWorkflowEvent, handleSseError, handleSseOpen);
       }
     };
-    
+
     if (consultationId) {
-      // Delay SSE connection slightly to ensure consultation is fully established
-      const timer = setTimeout(initializeSSE, 500);
-      return () => {
-        isActive = false;
-        clearTimeout(timer);
-        if (connectionCheckIntervalRef.current) {
-          clearInterval(connectionCheckIntervalRef.current);
-        }
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-        }
-        disconnectEventStream();
-        setSseConnected(false);
-      };
+      initializeSSE();
     } else {
+      disconnectEventStream();
+      setSseConnected(false);
+      setIsReconnectingSse(false);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('maisha_consultation_id');
       }
@@ -307,44 +276,41 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     
     return () => {
       isActive = false;
-      if (connectionCheckIntervalRef.current) {
-        clearInterval(connectionCheckIntervalRef.current);
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      disconnectEventStream();
+      logger.info('Effect: Cleaning up SSE connection on unmount or consultationId change.');
+      disconnectEventStream(); 
       setSseConnected(false);
+      setIsReconnectingSse(false);
     };
-  }, [consultationId, handleWorkflowEvent, handleSseError]);
+  }, [consultationId, handleWorkflowEvent, handleSseError, handleSseOpen]);
 
   const handleSendMessage = async (messageTextOverride?: string) => {
     const textToSend = messageTextOverride || inputMessage;
-    if ((!textToSend.trim() && !selectedFile) || isSending) return;
+    if ((!textToSend.trim() && !selectedFile) || isSending || isProcessingFile) { // Prevent send if already processing
+        logger.warn('handleSendMessage: Attempted to send while already sending or processing file.');
+        return;
+    }
 
     setIsSending(true);
     setIsLoading(true); 
     
-    // Special handling for file uploads
     if (selectedFile) {
       setIsProcessingFile(true);
       setWorkflowStatus({ 
         type: 'loading', 
-        message: 'Uploading and analyzing your test results. This may take several minutes...' 
+        message: 'Uploading your file...', // Initial upload message
       });
-      
-      // Set a longer timeout warning for file processing
+      // Timeout for user feedback if file processing takes too long on UI side
       fileProcessingTimeoutRef.current = setTimeout(() => {
-        if (isProcessingFile) {
+        if (isProcessingFile) { // Check if still processing
           setWorkflowStatus({
             type: 'info',
-            message: 'Still processing your test results. Large files may take extra time...',
+            message: 'Analysis is taking longer than usual. Please wait...',
             workflowName: 'test_analysis'
           });
         }
-      }, 60000); // Show message after 1 minute
+      }, 90000); // 1.5 minutes for this UI feedback
     } else {
-      setWorkflowStatus({ type: 'loading', message: 'Sending your message...' });
+      setWorkflowStatus({ type: 'loading', message: 'Sending message...' });
     }
 
     const optimisticUserMessage: Message = {
@@ -355,91 +321,74 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       timestamp: createTimestamp(),
     };
     addMessage(optimisticUserMessage);
-    
     setInputMessage(''); 
 
     try {
       const response: ChatResponse = await sendMessage(textToSend, selectedFile || undefined);
       
-      const isNewConsultation = !consultationId && response.consultation_id;
-      
-      if (response.consultation_id && !consultationId) {
-        setConsultationId(response.consultation_id);
-        logger.info(`New consultation ID received: ${response.consultation_id}`);
-      } else if (response.consultation_id && consultationId !== response.consultation_id) {
-        setConsultationId(response.consultation_id);
-        logger.info(`Consultation ID updated: ${response.consultation_id}`);
-      }
-      
-      // Check if this is a processing response
-      if (response.stage === 'processing' && selectedFile) {
-        // Don't add the processing message as a regular message
-        // The actual response will come through SSE
-        logger.info('File upload initiated, waiting for SSE completion event');
-        setIsSending(false);
-        // Keep isLoading true and isProcessingFile true
+      // New consultation ID management from service layer ensures it's set early
+      // If chatService updated consultationId, the useEffect for SSE will pick it up.
+
+      if (response._isBackgroundProcessing) {
+        logger.info('handleSendMessage: Background processing signaled.');
+        setIsSending(false); // Client-to-proxy part is done.
+        // isLoading and isProcessingFile (if it was a file) remain true.
+        // Update workflowStatus based on the specific signal from the proxy.
+        setWorkflowStatus({
+            type: 'loading', // Or 'info'
+            message: response.next_steps || 'Processing your request...',
+            workflowName: response.stage // e.g. 'processing_file' or 'processing_message'
+        });
+        // No AI message added to chat here; that will come via SSE.
         return;
       }
       
-      setCurrentStage(response.stage);
-      setShowRequisitionButton(response.stage === 'awaiting_tests' || (showRequisitionButton && response.stage !== 'test_recommendation_pending'));
+      // This is a direct, successful AI response (HTTP 200 from proxy)
+      if (response.stage) setCurrentStage(response.stage);
+      if (response.stage === 'awaiting_tests' || (showRequisitionButton && response.stage !== 'test_recommendation_pending')) {
+        // This logic for setShowRequisitionButton might need adjustment based on actual stages
+        setShowRequisitionButton(response.stage === 'awaiting_tests' || (showRequisitionButton && response.stage !== 'test_recommendation_pending'));
+      }
 
-      addMessage({
-        id: Date.now().toString() + '-ai',
-        text: response.message,
-        sender: 'assistant',
-        stage: response.stage,
-        next_steps: response.next_steps,
-        timestamp: createTimestamp(),
-      });
+
+      if (response.message) {
+        addMessage({
+          id: Date.now().toString() + '-ai',
+          text: response.message,
+          sender: 'assistant',
+          stage: response.stage,
+          next_steps: response.next_steps,
+          timestamp: createTimestamp(),
+        });
+      }
       
+      // Reset states for a direct successful response
       setSelectedFile(null); 
       setFilePreview(null);
       if(fileInputRef.current) fileInputRef.current.value = '';
-      
       setIsSending(false);
       setIsLoading(false);
-      setIsProcessingFile(false);
-      setWorkflowStatus(null);
-      
-      if (fileProcessingTimeoutRef.current) {
-        clearTimeout(fileProcessingTimeoutRef.current);
-      }
-      
-      if (isNewConsultation) {
-        logger.info('First message sent, SSE should connect soon...');
-      }
+      setIsProcessingFile(false); // Important: reset if it was a direct response (e.g. non-file message)
+      setWorkflowStatus(null); 
+      if (fileProcessingTimeoutRef.current) clearTimeout(fileProcessingTimeoutRef.current);
 
     } catch (error: any) {
-      logger.error('Error sending message:', error);
-      
-      // Special handling for timeout during file upload
-      if (error.message?.includes('AbortError') && selectedFile) {
-        logger.info('File upload request timed out, but processing continues on server');
-        setIsSending(false);
-        // Keep loading states active - the response will come through SSE
-        return;
-      }
-      
+      logger.error('handleSendMessage: Error after calling chatService.sendMessage:', error);
       addMessage({
-        id: Date.now().toString() + '-err',
-        text: error.message || "Sorry, I encountered an error. Please try again.",
+        id: Date.now().toString() + '-err-send',
+        text: error.message || "Sorry, an error occurred while sending your message. Please try again.",
         sender: 'system',
         timestamp: createTimestamp(),
       });
       setWorkflowStatus({ type: 'error', message: error.message || "Failed to send message." });
       
-      if (error.message && error.message.toLowerCase().includes('consultation not found')){
-        setConsultationId(null);
-      }
-      
+      // Reset all loading states on error
       setIsSending(false);
-      setIsLoading(false);
+      setIsLoading(false); 
       setIsProcessingFile(false);
-      
-      if (fileProcessingTimeoutRef.current) {
-        clearTimeout(fileProcessingTimeoutRef.current);
-      }
+      if (fileProcessingTimeoutRef.current) clearTimeout(fileProcessingTimeoutRef.current);
+      // If consultation not found, chatService already cleared local ID.
+      // The useEffect for consultationId will handle SSE disconnection.
     }
   };
 
@@ -851,7 +800,7 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
                 <span>{sseConnected ? 'Connected' : 'Connecting...'}</span>
               </div>
             )}
-            {isReconnecting && (
+            {isReconnectingSse && (
               <div className="flex items-center gap-1 text-xs bg-white/20 px-2 py-1 rounded-full">
                 <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
                 <span>Reconnecting...</span>
