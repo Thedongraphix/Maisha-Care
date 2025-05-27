@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 // Use environment variable with fallback
 const API_BASE_URL = process.env.AI_BACKEND_URL || 'https://v2deployment-production.up.railway.app';
 const AI_RESPONSE_TIMEOUT = 240000; // 4 minutes (was 28 seconds)
-const FILE_UPLOAD_TIMEOUT = 15000; // 15 seconds for file upload
+const FILE_UPLOAD_TIMEOUT = 180000; // 3 minutes for file upload
 
 // Track active uploads for potential cleanup/status
 const activeUploads = new Map<string, AbortController>();

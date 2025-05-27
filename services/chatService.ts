@@ -195,11 +195,10 @@ export const connectToEventStream = (
 ) => {
   if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
     logger.info('SSE: connectToEventStream called while connection already open or connecting. Closing existing one first.');
-    isIntentionalClose = true;
-    eventSource.close();
-    eventSource = null;
-    currentPingHandler = null;
-    isIntentionalClose = false;
+isIntentionalClose = true;
+eventSource.close();
+eventSource = null;
+currentPingHandler = null;
   }
 
   const consultationId = getConsultationId();
