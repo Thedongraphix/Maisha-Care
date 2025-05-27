@@ -11,7 +11,7 @@
   },
   "functions": {
     "app/api/**/*": {
-      "maxDuration": 60
+      "maxDuration": 180
     }
   },
   "headers": [
