@@ -134,9 +134,13 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
     
     // Fix: Check for AbortError and verify the abort reason
     if (error.name === 'AbortError') {
-      // Check if this was our timeout abort
-      const controller = error.signal?.reason || error.reason;
-      if (controller === 'ClientToProxyTimeout') {
+      // Determine if this was our own timeout abort
+      const abortReason =
+        (error as any).cause ??                 // Node / WHATWG fetch
+        (error as any).reason ??               // Future browsers
+        undefined;
+
+      if (abortReason === 'ClientToProxyTimeout') {
         logger.warn('chatService: Request to Next.js proxy timed out.');
         return {
           consultation_id: currentConsultationId, // Use existing ID
@@ -210,9 +214,6 @@ export const connectToEventStream = (
   const url = `${API_BASE_URL}/consultation/${consultationId}/events`;
   logger.info(`SSE: Attempting to connect to: ${url} (Attempt: ${reconnectAttempt + 1})`);
   
-  // Store the ping handler to properly remove it later
-  let pingHandler: (event: MessageEvent) => void;
-  
   try {
     eventSource = new EventSource(url);
     
@@ -238,8 +239,8 @@ export const connectToEventStream = (
       }
     };
     
-    // Store the ping handler for proper removal later
-    pingHandler = (event: MessageEvent) => {
+    // Create and store the ping handler for proper removal later
+    currentPingHandler = (event: MessageEvent) => {
         // This handles events explicitly named "ping" by the server: `event: ping\ndata: {...}\n\n`
         try {
             const pingData = JSON.parse(event.data); // As per your example, ping data is JSON
@@ -250,7 +251,8 @@ export const connectToEventStream = (
         }
     };
     
-    eventSource.addEventListener('ping', pingHandler);
+    // Fix: Assign the handler to the module variable and add the listener
+    eventSource.addEventListener('ping', currentPingHandler);
 
     eventSource.onerror = (errorEvent: Event) => {
       logger.error('SSE: Connection error occurred.', { errorEvent, readyState: eventSource?.readyState });
@@ -270,8 +272,9 @@ export const connectToEventStream = (
         currentEventSourceInstance.onmessage = null;
         currentEventSourceInstance.onerror = null;
         // Fix: Use the stored handler reference for proper removal
-        if (pingHandler) {
-          currentEventSourceInstance.removeEventListener('ping', pingHandler);
+        if (currentPingHandler) {
+          currentEventSourceInstance.removeEventListener('ping', currentPingHandler);
+          currentPingHandler = null; // Clear the reference after removal
         }
 
         const backoffTime = getBackoffTime();
@@ -330,7 +333,7 @@ export function disconnectEventStream(): void {
     // Fix: Use the stored handler reference for proper removal
     if (currentPingHandler) {
       eventSource.removeEventListener('ping', currentPingHandler);
-      currentPingHandler = null;
+      currentPingHandler = null; // Clear the reference after removal
     }
     eventSource.close();
     eventSource = null;
