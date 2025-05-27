@@ -29,15 +29,31 @@ export async function POST(request: NextRequest) {
     
     if (hasFile) {
       logger.info(`Chat Proxy: File upload detected for consultation: ${clientConsultationId}. Sending to backend non-blockingly.`);
+      
+      // Fix: Add timeout and abort mechanism for background file upload
+      const backgroundController = new AbortController();
+      const backgroundTimeoutId = setTimeout(() => {
+        logger.warn(`Chat Proxy: Background file upload timeout for consultation: ${clientConsultationId}`);
+        backgroundController.abort();
+      }, 15000); // 15 seconds timeout
+      
       // Send to backend but don't wait for the full response from the AI here.
       // The AI backend itself should handle the file and then trigger SSE events.
       fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         body: backendFormData,
-        // Consider a short timeout for this fetch if the backend /chat for files is also quick to acknowledge
+        signal: backgroundController.signal,
+      }).then(() => {
+        clearTimeout(backgroundTimeoutId);
+        logger.info(`Chat Proxy: Background file upload completed for consultation: ${clientConsultationId}`);
       }).catch(error => {
+        clearTimeout(backgroundTimeoutId);
         // Log error, but the client has already received a 202.
-        logger.error('Chat Proxy: Background file upload to AI backend failed:', error);
+        if (error.name === 'AbortError') {
+          logger.warn(`Chat Proxy: Background file upload aborted (timeout) for consultation: ${clientConsultationId}`);
+        } else {
+          logger.error('Chat Proxy: Background file upload to AI backend failed:', error);
+        }
       });
       
       // Return 202 Accepted: Client should now wait for SSE events for test_analysis workflow

@@ -104,7 +104,6 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
       logger.info(`chatService: New consultation ID set: ${data.consultation_id}`);
     }
 
-
     if (response.status === 202) {
       // Proxy signaled background processing (file upload or AI thinking timeout)
       return {
@@ -132,17 +131,27 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
 
   } catch (error: any) {
     logger.error('chatService.sendMessage: CATCH block error:', error);
-    if (error.message === 'ClientToProxyTimeout') {
-      logger.warn('chatService: Request to Next.js proxy timed out.');
-      return {
-        consultation_id: currentConsultationId, // Use existing ID
-        message: '', 
-        stage: 'processing_error', // Indicate a local problem
-        next_steps: 'Experiencing connection issues. Please wait or try again.',
-        _isBackgroundProcessing: true, // Let UI show a persistent status
-        status_detail: 'client_proxy_timeout'
-      };
+    
+    // Fix: Check for AbortError and verify the abort reason
+    if (error.name === 'AbortError') {
+      // Check if this was our timeout abort
+      const controller = error.signal?.reason || error.reason;
+      if (controller === 'ClientToProxyTimeout') {
+        logger.warn('chatService: Request to Next.js proxy timed out.');
+        return {
+          consultation_id: currentConsultationId, // Use existing ID
+          message: '', 
+          stage: 'processing_error', // Indicate a local problem
+          next_steps: 'Experiencing connection issues. Please wait or try again.',
+          _isBackgroundProcessing: true, // Let UI show a persistent status
+          status_detail: 'client_proxy_timeout'
+        };
+      }
+      // Handle other abort cases uniformly
+      logger.warn('chatService: Request was aborted.');
+      throw new Error('Request was cancelled');
     }
+    
     // For other errors (network, JSON parsing, etc.)
     throw error instanceof Error ? error : new Error('Failed to communicate with the AI service');
   }
@@ -172,6 +181,9 @@ function resetBackoff(): void {
   reconnectAttempt = 0;
 }
 
+// Store ping handler at module level for proper cleanup
+let currentPingHandler: ((event: MessageEvent) => void) | null = null;
+
 /**
  * Connects to the Server-Sent Events stream for a consultation.
  * @param onEvent - Callback function to handle incoming WorkflowEvent messages.
@@ -198,6 +210,9 @@ export const connectToEventStream = (
   const url = `${API_BASE_URL}/consultation/${consultationId}/events`;
   logger.info(`SSE: Attempting to connect to: ${url} (Attempt: ${reconnectAttempt + 1})`);
   
+  // Store the ping handler to properly remove it later
+  let pingHandler: (event: MessageEvent) => void;
+  
   try {
     eventSource = new EventSource(url);
     
@@ -223,7 +238,8 @@ export const connectToEventStream = (
       }
     };
     
-    eventSource.addEventListener('ping', (event: MessageEvent) => {
+    // Store the ping handler for proper removal later
+    pingHandler = (event: MessageEvent) => {
         // This handles events explicitly named "ping" by the server: `event: ping\ndata: {...}\n\n`
         try {
             const pingData = JSON.parse(event.data); // As per your example, ping data is JSON
@@ -232,7 +248,9 @@ export const connectToEventStream = (
         } catch (error) {
             logger.error('SSE: Error parsing JSON data for named "ping" event:', { data: event.data, error });
         }
-    });
+    };
+    
+    eventSource.addEventListener('ping', pingHandler);
 
     eventSource.onerror = (errorEvent: Event) => {
       logger.error('SSE: Connection error occurred.', { errorEvent, readyState: eventSource?.readyState });
@@ -251,8 +269,10 @@ export const connectToEventStream = (
         currentEventSourceInstance.onopen = null;
         currentEventSourceInstance.onmessage = null;
         currentEventSourceInstance.onerror = null;
-        currentEventSourceInstance.removeEventListener('ping', ()=>{}); // Crude way to remove, better to store handler
-
+        // Fix: Use the stored handler reference for proper removal
+        if (pingHandler) {
+          currentEventSourceInstance.removeEventListener('ping', pingHandler);
+        }
 
         const backoffTime = getBackoffTime();
         if (backoffTime > 0) {
@@ -307,7 +327,11 @@ export function disconnectEventStream(): void {
     eventSource.onopen = null;
     eventSource.onmessage = null;
     eventSource.onerror = null;
-    // eventSource.removeEventListener('ping', specificPingHandler); // If you store the handler
+    // Fix: Use the stored handler reference for proper removal
+    if (currentPingHandler) {
+      eventSource.removeEventListener('ping', currentPingHandler);
+      currentPingHandler = null;
+    }
     eventSource.close();
     eventSource = null;
   }
