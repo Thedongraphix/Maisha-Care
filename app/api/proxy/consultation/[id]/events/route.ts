@@ -40,7 +40,7 @@ export async function GET(
       const stream = new ReadableStream({
         async start(controller) {
           // Send initial connection event
-          const connectEvent = `event: connection\ndata: {"status": "connected", "consultation_id": "${consultationId}"}\n\n`;
+          const connectEvent = `event: connection\ndata: {"status": "connected", "consultation_id": "${consultationId}"}\n\n\ `;
           controller.enqueue(new TextEncoder().encode(connectEvent));
           
           try {
@@ -100,7 +100,7 @@ export async function GET(
               const remainingBuffer = lines.pop() || '';
               
               if (lines.length > 0) {
-                const completeData = lines.join('\n') + '\n';
+                const completeData = lines.join('\n') + '\n\n';
                 controller.enqueue(new TextEncoder().encode(completeData));
                 
                 // Log significant events
