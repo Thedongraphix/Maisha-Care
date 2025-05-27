@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   sendMessage,
   connectToEventStream,
@@ -34,6 +34,7 @@ interface WorkflowStatus {
   type: 'info' | 'error' | 'success' | 'loading';
   message: string;
   workflowName?: string;
+  timeoutId?: NodeJS.Timeout;
 }
 
 const ALLOWED_FILE_TYPES = [
@@ -44,6 +45,7 @@ const ALLOWED_FILE_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ];
 const MAX_FILE_SIZE_MB = 10;
+const WORKFLOW_STATUS_CLEAR_DELAY = 5000;
 
 interface ActiveConsultationProps {
   consultationType: 'text' | 'voice'; 
@@ -68,9 +70,14 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string>('');
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const workflowStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pdfBlobUrlRef = useRef<string | null>(null);
   
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -80,6 +87,31 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
 
   const addMessage = useCallback((message: Message, addToTop = false) => {
     setMessages(prev => addToTop ? [message, ...prev] : [...prev, message]);
+  }, []);
+
+  const clearWorkflowStatus = useCallback(() => {
+    if (workflowStatusTimeoutRef.current) {
+      clearTimeout(workflowStatusTimeoutRef.current);
+      workflowStatusTimeoutRef.current = null;
+    }
+    setWorkflowStatus(null);
+  }, []);
+
+  const setWorkflowStatusWithTimeout = useCallback((status: WorkflowStatus | null, delay?: number) => {
+    if (workflowStatusTimeoutRef.current) {
+      clearTimeout(workflowStatusTimeoutRef.current);
+      workflowStatusTimeoutRef.current = null;
+    }
+
+    setWorkflowStatus(status);
+
+    if (status && status.type !== 'loading' && delay !== 0) {
+      const timeoutDelay = delay ?? WORKFLOW_STATUS_CLEAR_DELAY;
+      workflowStatusTimeoutRef.current = setTimeout(() => {
+        setWorkflowStatus(null);
+        workflowStatusTimeoutRef.current = null;
+      }, timeoutDelay);
+    }
   }, []);
 
   useEffect(() => {
@@ -100,20 +132,12 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         timestamp: createTimestamp(), 
       });
     }
-  }, [addMessage]); 
-
-  // Add state to track SSE connection status
-  const [sseConnected, setSseConnected] = useState(false);
-
-  // Add state for tracking file processing
-  const [isProcessingFile, setIsProcessingFile] = useState(false);
-  const fileProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  }, []);
 
   const handleSseOpen = useCallback(() => {
     logger.info('SSE connection opened callback triggered.');
     setSseConnected(true);
     setIsReconnectingSse(false);
-    // Clear any "reconnecting" or "connection issue" status messages
     setWorkflowStatus(prev => {
         if (prev && (prev.message.includes('Reconnecting') || prev.message.includes('Connection issues') || prev.message.includes('Failed to connect'))) {
             return null;
@@ -125,23 +149,19 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   const handleSseError = useCallback((error: Event) => {
     logger.error('SSE Connection Error callback in ActiveConsultation:', error);
     setSseConnected(false);
-    
-    // We can't directly access reconnectAttempt from chatService here without causing prop drilling or context.
-    // The UI will show a generic reconnecting message.
-    // chatService's onError will be called, and it handles the backoff.
-    // If chatService emits a specific 'MaxRetriesReached' event, we could handle it here.
     setIsReconnectingSse(true); 
-    setWorkflowStatus({
+    setWorkflowStatusWithTimeout({
       type: 'info', 
       message: 'Connection to real-time updates lost. Attempting to reconnect...',
       workflowName: 'connection'
-    });
-  }, []);
+    }, 0);
+  }, [setWorkflowStatusWithTimeout]);
 
   const handleWorkflowEvent = useCallback((eventData: WorkflowEvent) => {
     logger.info('handleWorkflowEvent: Received SSE:', eventData);
     
-    if (eventData.consultation_id !== consultationId) {
+    const currentConsultationId = getStoredConsultationId();
+    if (eventData.consultation_id !== currentConsultationId) {
         logger.warn('SSE Event for different consultation ID received, ignoring.');
         return;
     }
@@ -156,14 +176,14 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
           setCurrentStage(stageMatch[1]);
           logger.info(`SSE: Current stage updated to: ${stageMatch[1]}`);
         }
-        setWorkflowStatus(prev => (prev?.message.includes("Reconnecting") || prev?.message.includes("Attempting to reconnect")) ? null : prev);
+        clearWorkflowStatus();
       } else if (eventData.message?.includes('timeout soon')) {
         logger.warn('SSE: Connection timeout warning received.');
-        setWorkflowStatus({
+        setWorkflowStatusWithTimeout({
           type: 'info',
           message: eventData.message,
           workflowName: 'connection'
-        });
+        }, 0);
       }
       return; 
     }
@@ -171,11 +191,11 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     if (eventData.workflow_name === 'test_analysis') {
       if (eventData.event_type === 'WORKFLOW_START') {
         setIsProcessingFile(true); 
-        setWorkflowStatus({
+        setWorkflowStatusWithTimeout({
           type: 'loading',
           message: eventData.message || 'Analyzing your test results...',
           workflowName: 'test_analysis'
-        });
+        }, 0);
       } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
         if (eventData.message) {
           addMessage({
@@ -189,22 +209,14 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         setIsProcessingFile(false);
         setIsLoading(false); 
         setIsSending(false); 
-        setWorkflowStatus({type: 'success', message: 'Test analysis complete.', workflowName: 'test_analysis'});
-        if (fileProcessingTimeoutRef.current) clearTimeout(fileProcessingTimeoutRef.current);
-        setTimeout(() => setWorkflowStatus(null), 4000);
-      } else if (eventData.event_type === 'WORKFLOW_ERROR') {
-        addMessage({
-          id: Date.now().toString() + '-analysis-error',
-          text: `Error during test analysis: ${eventData.message}`,
-          sender: 'system',
-          timestamp: new Date(eventData.timestamp),
+        clearFileProcessingTimeout();
+        setWorkflowStatusWithTimeout({
+          type: 'success', 
+          message: 'Test analysis complete.', 
+          workflowName: 'test_analysis'
         });
-        setIsProcessingFile(false);
-        setIsLoading(false);
-        setIsSending(false);
-        setWorkflowStatus({type: 'error', message: `Test analysis failed: ${eventData.message}`, workflowName: 'test_analysis'});
-        if (fileProcessingTimeoutRef.current) clearTimeout(fileProcessingTimeoutRef.current);
-        setTimeout(() => setWorkflowStatus(null), 7000);
+      } else if (eventData.event_type === 'WORKFLOW_ERROR') {
+        handleWorkflowError(eventData, 'test_analysis');
       }
       return; 
     }
@@ -214,14 +226,13 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     else if (eventData.event_type === 'WORKFLOW_COMPLETE') statusType = 'success';
     else if (eventData.event_type === 'WORKFLOW_START' || eventData.event_type === 'WORKFLOW_PROGRESS') statusType = 'loading';
 
-    setWorkflowStatus({
-      type: statusType,
-      message: eventData.message,
-      workflowName: eventData.workflow_name,
-    });
-
     if (eventData.event_type === 'WORKFLOW_START' || eventData.event_type === 'WORKFLOW_PROGRESS') {
-      setIsLoading(true); 
+      setIsLoading(true);
+      setWorkflowStatusWithTimeout({
+        type: statusType,
+        message: eventData.message,
+        workflowName: eventData.workflow_name,
+      }, 0);
     } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
       setIsLoading(false);
       setIsSending(false); 
@@ -235,37 +246,63 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
             stage: eventData.workflow_name 
         });
       }
+      
       if (eventData.workflow_name === 'test_recommendation') {
         setShowRequisitionButton(true);
       }
-      setTimeout(() => setWorkflowStatus(null), 4000);
+      
+      setWorkflowStatusWithTimeout({
+        type: statusType,
+        message: eventData.message,
+        workflowName: eventData.workflow_name,
+      });
     } else if (eventData.event_type === 'WORKFLOW_ERROR') {
-        setIsLoading(false);
-        setIsSending(false);
-        if (eventData.message) {
-            addMessage({
-                id: Date.now().toString() + '-workflow-error-' + eventData.workflow_name,
-                text: `An issue occurred with ${eventData.workflow_name}: ${eventData.message}`,
-                sender: 'system',
-                timestamp: new Date(eventData.timestamp),
-            });
-        }
-        setTimeout(() => setWorkflowStatus(null), 7000);
+        handleWorkflowError(eventData, eventData.workflow_name);
     }
-  }, [consultationId, addMessage]); 
+  }, [addMessage, clearWorkflowStatus, setWorkflowStatusWithTimeout]); 
+
+  const handleWorkflowError = useCallback((eventData: WorkflowEvent, workflowName: string) => {
+    addMessage({
+        id: Date.now().toString() + '-workflow-error-' + workflowName,
+        text: `An issue occurred with ${workflowName}: ${eventData.message}`,
+        sender: 'system',
+        timestamp: new Date(eventData.timestamp),
+    });
+    setIsLoading(false);
+    setIsSending(false);
+    setIsProcessingFile(false);
+    clearFileProcessingTimeout();
+    setWorkflowStatusWithTimeout({
+      type: 'error',
+      message: eventData.message,
+      workflowName: workflowName,
+    }, 7000);
+  }, [addMessage, setWorkflowStatusWithTimeout]);
+
+  const clearFileProcessingTimeout = useCallback(() => {
+    if (fileProcessingTimeoutRef.current) {
+      clearTimeout(fileProcessingTimeoutRef.current);
+      fileProcessingTimeoutRef.current = null;
+    }
+  }, []);
   
   useEffect(() => {
     let isActive = true;
-    const initializeSSE = () => {
-      if (consultationId && isActive) {
-        logger.info(`Effect: Initializing SSE for consultation: ${consultationId}`);
-        connectToEventStream(handleWorkflowEvent, handleSseError, handleSseOpen);
-      }
-    };
-
-    if (consultationId) {
-      initializeSSE();
-    } else {
+    
+    if (consultationId && isActive) {
+      logger.info(`Effect: Initializing SSE for consultation: ${consultationId}`);
+      const stableHandleWorkflowEvent = (event: WorkflowEvent) => {
+        if (isActive) handleWorkflowEvent(event);
+      };
+      const stableHandleSseError = (error: Event) => {
+        if (isActive) handleSseError(error);
+      };
+      const stableHandleSseOpen = () => {
+        if (isActive) handleSseOpen();
+      };
+      
+      connectToEventStream(stableHandleWorkflowEvent, stableHandleSseError, stableHandleSseOpen);
+    } else if (!consultationId) {
       disconnectEventStream();
       setSseConnected(false);
       setIsReconnectingSse(false);
@@ -281,11 +318,11 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       setSseConnected(false);
       setIsReconnectingSse(false);
     };
-  }, [consultationId, handleWorkflowEvent, handleSseError, handleSseOpen]);
+  }, [consultationId]);
 
   const handleSendMessage = async (messageTextOverride?: string) => {
     const textToSend = messageTextOverride || inputMessage;
-    if ((!textToSend.trim() && !selectedFile) || isSending || isProcessingFile) { // Prevent send if already processing
+    if ((!textToSend.trim() && !selectedFile) || isSending || isProcessingFile) {
         logger.warn('handleSendMessage: Attempted to send while already sending or processing file.');
         return;
     }
@@ -295,22 +332,21 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     
     if (selectedFile) {
       setIsProcessingFile(true);
-      setWorkflowStatus({ 
+      setWorkflowStatusWithTimeout({ 
         type: 'loading', 
-        message: 'Uploading your file...', // Initial upload message
-      });
-      // Timeout for user feedback if file processing takes too long on UI side
+        message: 'Uploading your file...', 
+      }, 0);
       fileProcessingTimeoutRef.current = setTimeout(() => {
-        if (isProcessingFile) { // Check if still processing
-          setWorkflowStatus({
+        if (isProcessingFile) {
+          setWorkflowStatusWithTimeout({
             type: 'info',
             message: 'Analysis is taking longer than usual. Please wait...',
             workflowName: 'test_analysis'
-          });
+          }, 0);
         }
-      }, 90000); // 1.5 minutes for this UI feedback
+      }, 90000);
     } else {
-      setWorkflowStatus({ type: 'loading', message: 'Sending message...' });
+      setWorkflowStatusWithTimeout({ type: 'loading', message: 'Sending message...' }, 0);
     }
 
     const optimisticUserMessage: Message = {
@@ -325,31 +361,22 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
 
     try {
       const response: ChatResponse = await sendMessage(textToSend, selectedFile || undefined);
-      
-      // New consultation ID management from service layer ensures it's set early
-      // If chatService updated consultationId, the useEffect for SSE will pick it up.
 
       if (response._isBackgroundProcessing) {
         logger.info('handleSendMessage: Background processing signaled.');
-        setIsSending(false); // Client-to-proxy part is done.
-        // isLoading and isProcessingFile (if it was a file) remain true.
-        // Update workflowStatus based on the specific signal from the proxy.
-        setWorkflowStatus({
-            type: 'loading', // Or 'info'
+        setIsSending(false);
+        setWorkflowStatusWithTimeout({
+            type: 'loading',
             message: response.next_steps || 'Processing your request...',
-            workflowName: response.stage // e.g. 'processing_file' or 'processing_message'
-        });
-        // No AI message added to chat here; that will come via SSE.
+            workflowName: response.stage
+        }, 0);
         return;
       }
       
-      // This is a direct, successful AI response (HTTP 200 from proxy)
-      if (response.stage) setCurrentStage(response.stage);
-      if (response.stage === 'awaiting_tests' || (showRequisitionButton && response.stage !== 'test_recommendation_pending')) {
-        // This logic for setShowRequisitionButton might need adjustment based on actual stages
-        setShowRequisitionButton(response.stage === 'awaiting_tests' || (showRequisitionButton && response.stage !== 'test_recommendation_pending'));
+      if (response.stage) {
+        setCurrentStage(response.stage);
+        setShowRequisitionButton(response.stage === 'awaiting_tests' || response.stage === 'test_recommendation_complete');
       }
-
 
       if (response.message) {
         addMessage({
@@ -362,54 +389,58 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         });
       }
       
-      // Reset states for a direct successful response
-      setSelectedFile(null); 
-      setFilePreview(null);
-      if(fileInputRef.current) fileInputRef.current.value = '';
-      setIsSending(false);
-      setIsLoading(false);
-      setIsProcessingFile(false); // Important: reset if it was a direct response (e.g. non-file message)
-      setWorkflowStatus(null); 
-      if (fileProcessingTimeoutRef.current) clearTimeout(fileProcessingTimeoutRef.current);
+      resetAfterSend();
 
     } catch (error: any) {
-      logger.error('handleSendMessage: Error after calling chatService.sendMessage:', error);
+      logger.error('handleSendMessage: Error:', error);
       addMessage({
         id: Date.now().toString() + '-err-send',
-        text: error.message || "Sorry, an error occurred while sending your message. Please try again.",
+        text: error.message || "Sorry, an error occurred. Please try again.",
         sender: 'system',
         timestamp: createTimestamp(),
       });
-      setWorkflowStatus({ type: 'error', message: error.message || "Failed to send message." });
+      setWorkflowStatusWithTimeout({ 
+        type: 'error', 
+        message: error.message || "Failed to send message." 
+      });
       
-      // Reset all loading states on error
-      setIsSending(false);
-      setIsLoading(false); 
-      setIsProcessingFile(false);
-      if (fileProcessingTimeoutRef.current) clearTimeout(fileProcessingTimeoutRef.current);
-      // If consultation not found, chatService already cleared local ID.
-      // The useEffect for consultationId will handle SSE disconnection.
+      resetAfterSend(true);
     }
+  };
+
+  const resetAfterSend = (isError = false) => {
+    setSelectedFile(null); 
+    setFilePreview(null);
+    if(fileInputRef.current) fileInputRef.current.value = '';
+    setIsSending(false);
+    setIsLoading(false);
+    setIsProcessingFile(false);
+    clearFileProcessingTimeout();
+    if (!isError) clearWorkflowStatus();
   };
 
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-        setWorkflowStatus({type: 'error', message: `Invalid file type. Allowed: JPG, PNG, PDF, DOC(X)`});
+        setWorkflowStatusWithTimeout({
+          type: 'error', 
+          message: `Invalid file type. Allowed: JPG, PNG, PDF, DOC(X)`
+        });
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setSelectedFile(null); setFilePreview(null);
         return;
       }
       if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-        setWorkflowStatus({type: 'error', message: `File too large. Max size: ${MAX_FILE_SIZE_MB}MB`});
+        setWorkflowStatusWithTimeout({
+          type: 'error', 
+          message: `File too large. Max size: ${MAX_FILE_SIZE_MB}MB`
+        });
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setSelectedFile(null); setFilePreview(null);
         return;
       }
       setSelectedFile(file);
       setFilePreview(file.name);
-      setWorkflowStatus(null); 
+      clearWorkflowStatus();
     } else {
       setSelectedFile(null);
       setFilePreview(null);
@@ -425,7 +456,7 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   };
   
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !isSending) {
+    if (e.key === 'Enter' && !e.shiftKey && !isSending && !isProcessingFile) {
       e.preventDefault();
       handleSendMessage();
     }
@@ -444,42 +475,52 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         timestamp: createTimestamp(),
       }
     ]);
-    setInputMessage('');
-    setIsLoading(false);
-    setIsSending(false);
-    setSelectedFile(null);
-    setFilePreview(null);
-    setWorkflowStatus(null);
+    resetAfterSend();
+    clearWorkflowStatus();
     setShowRequisitionButton(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    setSseConnected(false);
+    setIsReconnectingSse(false);
     logger.info('Chat has been reset.');
     onClose(); 
   };
 
   const handleGenerateRequisition = async () => {
     if (!consultationId) {
-        setWorkflowStatus({type: 'error', message: 'No active consultation for requisition.'});
+        setWorkflowStatusWithTimeout({
+          type: 'error', 
+          message: 'No active consultation for requisition.'
+        });
       return;
     }
     setIsLoading(true);
-    setWorkflowStatus({ type: 'loading', message: 'Fetching requisition data...'});
+    setWorkflowStatusWithTimeout({ 
+      type: 'loading', 
+      message: 'Fetching requisition data...'
+    }, 0);
+    
     try {
         const data: TestRequisitionData | null = await fetchRequisitionData();
         if (data) {
             logger.info('TestRequisitionData fetched:', data);
-            setWorkflowStatus({type: 'success', message: `Requisition for ${data.patient_name} ready.` });
-            
-            // Generate and download PDF using jsPDF
+            setWorkflowStatusWithTimeout({
+              type: 'success', 
+              message: `Requisition for ${data.patient_name} ready.` 
+            });
             generateRequisitionPDF(data);
         } else {
-            setWorkflowStatus({type: 'info', message: 'No requisition data available or an error occurred while fetching.'});
+            setWorkflowStatusWithTimeout({
+              type: 'info', 
+              message: 'No requisition data available yet.'
+            });
         }
     } catch (error: any) {
         logger.error('Error fetching requisition data:', error);
-        setWorkflowStatus({type: 'error', message: error.message || 'Could not fetch requisition data.'});
+        setWorkflowStatusWithTimeout({
+          type: 'error', 
+          message: error.message || 'Could not fetch requisition data.'
+        });
     } finally {
         setIsLoading(false);
-        setTimeout(() => setWorkflowStatus(null), 6000);
     }
   };
 
@@ -487,12 +528,10 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     try {
       const pdf = new jsPDF();
       
-      // Set up colors as tuples with explicit type assertions
       const primaryBlue: [number, number, number] = [37, 99, 235];
       const darkGray: [number, number, number] = [31, 41, 55];
       const mediumGray: [number, number, number] = [107, 114, 128];
       
-      // Header Section
       pdf.setFontSize(24);
       pdf.setTextColor(...primaryBlue);
       pdf.setFont('helvetica', 'bold');
@@ -503,12 +542,10 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       pdf.setFont('helvetica', 'normal');
       pdf.text('Medical Test Requisition', 105, 35, { align: 'center' });
       
-      // Add a line under header
       pdf.setDrawColor(...primaryBlue);
       pdf.setLineWidth(1);
       pdf.line(20, 40, 190, 40);
       
-      // Format date
       const formattedDate = new Date(data.date_requested).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -519,13 +556,11 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       
       let yPosition = 55;
       
-      // Patient Information Section
       pdf.setFontSize(14);
       pdf.setTextColor(...darkGray);
       pdf.setFont('helvetica', 'bold');
       pdf.text('PATIENT INFORMATION', 20, yPosition);
       
-      // Add background rectangle for patient info
       pdf.setFillColor(249, 250, 251);
       pdf.rect(20, yPosition + 2, 170, 35, 'F');
       
@@ -533,7 +568,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       pdf.setFontSize(11);
       pdf.setFont('helvetica', 'normal');
       
-      // Patient details in two columns
       pdf.setTextColor(...darkGray);
       pdf.setFont('helvetica', 'bold');
       pdf.text('Patient Name:', 25, yPosition);
@@ -565,7 +599,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       
       yPosition += 25;
       
-      // Requesting Physician Section
       pdf.setFontSize(14);
       pdf.setTextColor(...darkGray);
       pdf.setFont('helvetica', 'bold');
@@ -580,7 +613,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       pdf.setTextColor(...mediumGray);
       pdf.text(data.requesting_physician, 25, yPosition);
       
-      // Priority badge
       const priorityColor: [number, number, number] = data.priority === 'Urgent' ? [220, 38, 38] : [22, 163, 74];
       pdf.setFillColor(...priorityColor);
       pdf.roundedRect(140, yPosition - 5, 25, 8, 2, 2, 'F');
@@ -591,7 +623,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       
       yPosition += 25;
       
-      // Tests Requested Section
       pdf.setFontSize(14);
       pdf.setTextColor(...darkGray);
       pdf.setFont('helvetica', 'bold');
@@ -599,7 +630,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       
       yPosition += 10;
       
-      // Tests list with styled boxes
       data.tests_requested.forEach((test, index) => {
         if (yPosition > 250) {
           pdf.addPage();
@@ -626,7 +656,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       
       yPosition += 10;
       
-      // Clinical Notes Section (if available)
       if (data.clinical_notes) {
         if (yPosition > 220) {
           pdf.addPage();
@@ -657,7 +686,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         yPosition += 40;
       }
       
-      // Footer
       const pageHeight = pdf.internal.pageSize.height;
       pdf.setFontSize(9);
       pdf.setTextColor(...mediumGray);
@@ -670,23 +698,26 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
       pdf.text('Please present this requisition to your healthcare provider or laboratory', 105, pageHeight - 12, { align: 'center' });
       pdf.text(`Generated on: ${formattedDate}`, 105, pageHeight - 4, { align: 'center' });
       
-      // Generate filename
       const fileName = `Test_Requisition_${data.patient_name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
       
-      // Create blob for preview
       const pdfBlob = pdf.output('blob');
+      
+      if (pdfBlobUrlRef.current) {
+        URL.revokeObjectURL(pdfBlobUrlRef.current);
+      }
+      
       setPdfBlob(pdfBlob);
       setPdfFileName(fileName);
       setShowPdfModal(true);
       
-      setWorkflowStatus({
+      setWorkflowStatusWithTimeout({
         type: 'success', 
         message: `Requisition PDF ready for ${data.patient_name}.`
       });
       
     } catch (error: any) {
       logger.error('Error generating PDF:', error);
-      setWorkflowStatus({
+      setWorkflowStatusWithTimeout({
         type: 'error', 
         message: error.message || 'Failed to generate PDF'
       });
@@ -695,26 +726,26 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
 
   const downloadPdf = () => {
     if (pdfBlob && pdfFileName) {
-      // Create a temporary URL for the blob
       const url = URL.createObjectURL(pdfBlob);
+      pdfBlobUrlRef.current = url;
       
-      // Create a temporary anchor element and trigger download
       const link = document.createElement('a');
       link.href = url;
       link.download = pdfFileName;
       link.style.display = 'none';
       
-      // Append to body, click, and remove
       document.body.appendChild(link);
       link.click();
       
-      // Clean up
       setTimeout(() => {
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        if (pdfBlobUrlRef.current === url) {
+          URL.revokeObjectURL(url);
+          pdfBlobUrlRef.current = null;
+        }
       }, 100);
       
-      setWorkflowStatus({
+      setWorkflowStatusWithTimeout({
         type: 'success',
         message: `PDF "${pdfFileName}" downloaded successfully.`
       });
@@ -726,34 +757,53 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
   const closePdfModal = () => {
     setShowPdfModal(false);
     
-    // Clean up the blob URL used in the iframe
-    if (pdfBlob) {
-      const iframes = document.querySelectorAll('iframe[title="PDF Preview"]');
-      iframes.forEach(iframe => {
-        const src = (iframe as HTMLIFrameElement).src;
-        if (src.startsWith('blob:')) {
-          URL.revokeObjectURL(src);
-        }
-      });
+    const iframes = document.querySelectorAll('iframe[title="PDF Preview"]');
+    iframes.forEach(iframe => {
+      const src = (iframe as HTMLIFrameElement).src;
+      if (src.startsWith('blob:')) {
+        URL.revokeObjectURL(src);
+      }
+    });
+    
+    if (pdfBlobUrlRef.current) {
+      URL.revokeObjectURL(pdfBlobUrlRef.current);
+      pdfBlobUrlRef.current = null;
     }
     
     setPdfBlob(null);
     setPdfFileName('');
   };
 
-  const toggleRecording = () => {
-    setIsRecording(!isRecording);
+  const toggleRecording = async () => {
     if (!isRecording) {
-      addMessage({id: Date.now().toString(), text: "[Voice recording started...]", sender: 'system', timestamp: createTimestamp()});
+      setIsRecording(true);
+      addMessage({
+        id: Date.now().toString(), 
+        text: "[Voice recording started...]", 
+        sender: 'system', 
+        timestamp: createTimestamp()
+      });
     } else {
-        handleSendMessage("[Simulated Voice Message Transcription]");
+      setIsRecording(false);
+      try {
+        await handleSendMessage("[Simulated Voice Message Transcription]");
+      } catch (error) {
+        setIsRecording(false);
+        logger.error('Failed to send voice message:', error);
+      }
     }
     logger.info(`Recording toggled: ${!isRecording}`);
   };
   
   const handleFinalizeConsultation = () => {
-    if (currentStage === 'Completed' || currentStage === 'treatment_plan_generated' || currentStage === 'diagnosis_complete') {
-        addMessage({id: Date.now().toString(), text: "Consultation has been concluded. Thank you for using Maisha Care!", sender: 'system', timestamp: createTimestamp()});
+    const completionStages = ['Completed', 'treatment_plan_generated', 'diagnosis_complete'];
+    if (completionStages.includes(currentStage || '')) {
+        addMessage({
+          id: Date.now().toString(), 
+          text: "Consultation has been concluded. Thank you for using Maisha Care!", 
+          sender: 'system', 
+          timestamp: createTimestamp()
+        });
         logger.info('Consultation concluded by user action or final stage reached.');
         if (typeof window !== 'undefined') {
             localStorage.removeItem('maisha_consultation_id');
@@ -761,24 +811,28 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         setConsultationId(null); 
         onClose(); 
     } else {
-        setWorkflowStatus({type: 'info', message: 'The consultation is still in progress. Please wait for the AI to guide you to completion.'});
-        setTimeout(() => setWorkflowStatus(null), 5000);
+        setWorkflowStatusWithTimeout({
+          type: 'info', 
+          message: 'The consultation is still in progress. Please wait for the AI to guide you to completion.'
+        });
     }
   };
 
-  // Update the input disabled state to consider file processing
-  const isInputDisabled = isLoading || isSending || isProcessingFile;
-  const canShowFileUpload = currentStage === 'awaiting_tests';
-  const canShowFinalizeButton = currentStage === 'Completed' || currentStage === 'treatment_plan_generated' || currentStage === 'diagnosis_complete';
-
-  // Clean up on unmount
   useEffect(() => {
     return () => {
-      if (fileProcessingTimeoutRef.current) {
-        clearTimeout(fileProcessingTimeoutRef.current);
+      clearFileProcessingTimeout();
+      if (workflowStatusTimeoutRef.current) {
+        clearTimeout(workflowStatusTimeoutRef.current);
+      }
+      if (pdfBlobUrlRef.current) {
+        URL.revokeObjectURL(pdfBlobUrlRef.current);
       }
     };
   }, []);
+
+  const isInputDisabled = isLoading || isSending || isProcessingFile;
+  const canShowFileUpload = currentStage === 'awaiting_tests';
+  const canShowFinalizeButton = ['Completed', 'treatment_plan_generated', 'diagnosis_complete'].includes(currentStage || '');
 
   return (
     <>
@@ -789,7 +843,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
             {currentStage && <p className="text-xs opacity-90 font-jost">Stage: <span className='font-semibold capitalize'>{currentStage.replace(/_/g, ' ')}</span></p>}
           </div>
           <div className='flex items-center gap-2'>
-            {/* SSE Connection Status Indicator */}
             {consultationId && (
               <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
                 sseConnected ? 'bg-green-500/20' : 'bg-amber-500/20'
@@ -936,7 +989,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
         </div>
       </div>
 
-      {/* PDF Preview Modal */}
       {showPdfModal && pdfBlob && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">

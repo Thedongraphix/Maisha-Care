@@ -74,16 +74,18 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
     formData.append('file', fileToUpload);
   }
 
+  // Track if this is our timeout
+  let isOurTimeout = false;
+  
   try {
-    // This timeout is client-to-OUR-chat-proxy.
-    // The proxy itself has a timeout for communication with the AI_BASE_URL.
     const controller = new AbortController();
     const clientToProxyTimeoutId = setTimeout(() => {
         logger.warn('chatService: Timeout sending request to our Next.js proxy /api/proxy/chat');
-        controller.abort('ClientToProxyTimeout');
-    }, 35000); // e.g., 35s, slightly longer than AI_RESPONSE_TIMEOUT in proxy
+        isOurTimeout = true; // Set flag before aborting
+        controller.abort();
+    }, 35000);
 
-    const response = await fetch(`${API_BASE_URL}/chat`, { // API_BASE_URL is /api/proxy
+    const response = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
       body: formData,
       signal: controller.signal,
@@ -132,31 +134,24 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
   } catch (error: any) {
     logger.error('chatService.sendMessage: CATCH block error:', error);
     
-    // Fix: Check for AbortError and verify the abort reason
+    // Fix: Use the flag instead of trying to detect abort reason
     if (error.name === 'AbortError') {
-      // Determine if this was our own timeout abort
-      const abortReason =
-        (error as any).cause ??                 // Node / WHATWG fetch
-        (error as any).reason ??               // Future browsers
-        undefined;
-
-      if (abortReason === 'ClientToProxyTimeout') {
+      if (isOurTimeout) {
         logger.warn('chatService: Request to Next.js proxy timed out.');
         return {
-          consultation_id: currentConsultationId, // Use existing ID
+          consultation_id: currentConsultationId,
           message: '', 
-          stage: 'processing_error', // Indicate a local problem
+          stage: 'processing_error',
           next_steps: 'Experiencing connection issues. Please wait or try again.',
-          _isBackgroundProcessing: true, // Let UI show a persistent status
+          _isBackgroundProcessing: true,
           status_detail: 'client_proxy_timeout'
         };
       }
-      // Handle other abort cases uniformly
+      // Handle other abort cases
       logger.warn('chatService: Request was aborted.');
       throw new Error('Request was cancelled');
     }
     
-    // For other errors (network, JSON parsing, etc.)
     throw error instanceof Error ? error : new Error('Failed to communicate with the AI service');
   }
 }
@@ -188,6 +183,9 @@ function resetBackoff(): void {
 // Store ping handler at module level for proper cleanup
 let currentPingHandler: ((event: MessageEvent) => void) | null = null;
 
+// Add a flag to prevent reconnection during intentional closure
+let isIntentionalClose = false;
+
 /**
  * Connects to the Server-Sent Events stream for a consultation.
  * @param onEvent - Callback function to handle incoming WorkflowEvent messages.
@@ -200,8 +198,11 @@ export const connectToEventStream = (
 ) => {
   if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
     logger.info('SSE: connectToEventStream called while connection already open or connecting. Closing existing one first.');
-    eventSource.close(); // This should trigger its onerror if it was open, then our logic continues
+    isIntentionalClose = true; // Set flag before closing
+    eventSource.close();
     eventSource = null;
+    currentPingHandler = null; // Also clear the handler
+    isIntentionalClose = false; // Reset flag
   }
 
   const consultationId = getConsultationId();
@@ -258,7 +259,13 @@ export const connectToEventStream = (
       logger.error('SSE: Connection error occurred.', { errorEvent, readyState: eventSource?.readyState });
       
       if (onError) {
-        onError(errorEvent); // Notify the component immediately
+        onError(errorEvent);
+      }
+      
+      // Skip reconnection if this was an intentional close
+      if (isIntentionalClose) {
+        logger.info('SSE: Skipping reconnection due to intentional close.');
+        return;
       }
       
       // If the EventSource is closed, it means the connection is truly gone.
@@ -281,11 +288,12 @@ export const connectToEventStream = (
         if (backoffTime > 0) {
           logger.info(`SSE: Connection closed. Attempting to reconnect in ${backoffTime}ms (attempt ${reconnectAttempt} of ${MAX_RECONNECT_ATTEMPTS})...`);
           setTimeout(() => {
-            // Check if a consultation is still active and no new EventSource has been created in the meantime
-            if (getConsultationId() && !eventSource) { 
+            const currentConsultationId = getConsultationId();
+            // Only reconnect if it's still the same consultation
+            if (currentConsultationId === consultationId && !eventSource) { 
               connectToEventStream(onEvent, onError, onOpen);
             } else {
-              logger.info('SSE: Reconnection aborted; consultation ID changed or new EventSource already active.');
+              logger.info(`SSE: Reconnection aborted; consultation ID changed from ${consultationId} to ${currentConsultationId} or new EventSource already active.`);
             }
           }, backoffTime);
         } else {
@@ -299,7 +307,7 @@ export const connectToEventStream = (
       }
     };
     
-  } catch (error) { // This catches errors during `new EventSource(url)`
+  } catch (error) {
     logger.error('SSE: Failed to create EventSource instance:', error);
     if (onError) {
       onError(new Event('EventSourceCreationError'));
