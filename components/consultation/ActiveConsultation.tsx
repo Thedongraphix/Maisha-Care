@@ -114,6 +114,179 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     }
   }, []);
 
+  const handleSseError = useCallback((error: Event) => {
+    logger.error('SSE Connection Error callback in ActiveConsultation:', error);
+    setSseConnected(false);
+    setIsReconnectingSse(true); 
+    setWorkflowStatusWithTimeout({
+      type: 'info', 
+      message: 'Connection to real-time updates lost. Attempting to reconnect...',
+      workflowName: 'connection'
+    }, 0);
+  }, [setWorkflowStatusWithTimeout]);
+
+  const handleWorkflowError = useCallback((eventData: WorkflowEvent, workflowName: string) => {
+    addMessage({
+        id: Date.now().toString() + '-workflow-error-' + workflowName,
+        text: `An issue occurred with ${workflowName}: ${eventData.message}`,
+        sender: 'system',
+        timestamp: new Date(eventData.timestamp),
+    });
+    setIsLoading(false);
+    setIsSending(false);
+    setIsProcessingFile(false);
+    clearFileProcessingTimeout();
+    setWorkflowStatusWithTimeout({
+      type: 'error',
+      message: eventData.message,
+      workflowName: workflowName,
+    }, 7000);
+  }, [addMessage, setWorkflowStatusWithTimeout]);
+
+  const clearFileProcessingTimeout = useCallback(() => {
+    if (fileProcessingTimeoutRef.current) {
+      clearTimeout(fileProcessingTimeoutRef.current);
+      fileProcessingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleWorkflowEvent = useCallback((eventData: WorkflowEvent) => {
+    logger.info('handleWorkflowEvent: Received SSE:', eventData);
+    
+    const currentConsultationId = getStoredConsultationId();
+    if (eventData.consultation_id !== currentConsultationId) {
+        logger.warn('SSE Event for different consultation ID received, ignoring.');
+        return;
+    }
+
+    if (eventData.workflow_name === 'connection') {
+      if (eventData.message?.includes('Connected to consultation')) {
+        logger.info('SSE: Connection message processed.');
+        setSseConnected(true);
+        setIsReconnectingSse(false);
+        const stageMatch = eventData.message.match(/Current stage: (\w+)/);
+        if (stageMatch && stageMatch[1]) {
+          setCurrentStage(stageMatch[1]);
+          logger.info(`SSE: Current stage updated to: ${stageMatch[1]}`);
+        }
+        clearWorkflowStatus();
+      } else if (eventData.message?.includes('timeout soon')) {
+        logger.warn('SSE: Connection timeout warning received.');
+        // Don't set a workflow status that blocks the UI
+        // The connection will auto-reconnect
+      }
+      return; 
+    }
+
+    if (eventData.workflow_name === 'test_analysis') {
+      if (eventData.event_type === 'WORKFLOW_START') {
+        setIsProcessingFile(true);
+        setWorkflowStatusWithTimeout({
+          type: 'loading',
+          message: eventData.message || 'Analyzing your test results...',
+          workflowName: 'test_analysis'
+        }, 0);
+      } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
+        if (eventData.message) {
+          addMessage({
+            id: Date.now().toString() + '-analysis-result',
+            text: eventData.message,
+            sender: 'assistant',
+            timestamp: new Date(eventData.timestamp),
+            stage: 'diagnosis_pending' 
+          });
+        }
+        setIsProcessingFile(false);
+        setIsLoading(false);
+        setIsSending(false); 
+        clearFileProcessingTimeout();
+        setWorkflowStatusWithTimeout({
+          type: 'success', 
+          message: 'Test analysis complete.', 
+          workflowName: 'test_analysis'
+        });
+      } else if (eventData.event_type === 'WORKFLOW_ERROR') {
+        handleWorkflowError(eventData, 'test_analysis');
+      }
+      return;
+    }
+
+    if (eventData.workflow_name === 'test_recommendation') {
+      if (eventData.event_type === 'WORKFLOW_START') {
+        setIsLoading(true);
+        setWorkflowStatusWithTimeout({
+          type: 'loading',
+          message: eventData.message || 'Generating test recommendations...',
+          workflowName: 'test_recommendation'
+        }, 0);
+      } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
+        if (eventData.message) {
+          addMessage({
+            id: Date.now().toString() + '-test-recommendation',
+            text: eventData.message,
+            sender: 'assistant',
+            timestamp: new Date(eventData.timestamp),
+            stage: 'awaiting_tests'
+          });
+        }
+        setIsLoading(false);
+        setIsSending(false);
+        setCurrentStage('awaiting_tests');
+        setShowRequisitionButton(true);
+        setWorkflowStatusWithTimeout({
+          type: 'success',
+          message: 'Test recommendations ready.',
+          workflowName: 'test_recommendation'
+        });
+      } else if (eventData.event_type === 'WORKFLOW_ERROR') {
+        handleWorkflowError(eventData, 'test_recommendation');
+      }
+      return;
+    }
+
+    // Handle other workflows
+    let statusType: WorkflowStatus['type'] = 'info';
+    if (eventData.event_type === 'WORKFLOW_ERROR') statusType = 'error';
+    else if (eventData.event_type === 'WORKFLOW_COMPLETE') statusType = 'success';
+    else if (eventData.event_type === 'WORKFLOW_START' || eventData.event_type === 'WORKFLOW_PROGRESS') statusType = 'loading';
+
+    if (eventData.event_type === 'WORKFLOW_START' || eventData.event_type === 'WORKFLOW_PROGRESS') {
+      setIsLoading(true);
+      setWorkflowStatusWithTimeout({
+        type: statusType,
+        message: eventData.message,
+        workflowName: eventData.workflow_name,
+      }, 0);
+    } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
+      setIsLoading(false);
+      setIsSending(false); 
+
+      if (eventData.message) { 
+        addMessage({
+            id: Date.now().toString() + '-workflow-' + eventData.workflow_name,
+            text: eventData.message,
+            sender: 'assistant', 
+            timestamp: new Date(eventData.timestamp),
+            stage: eventData.workflow_name 
+        });
+      }
+      
+      // Additional check for test_recommendation in generic handler
+      if (eventData.workflow_name === 'test_recommendation') {
+        setShowRequisitionButton(true);
+        setCurrentStage('awaiting_tests');
+      }
+      
+      setWorkflowStatusWithTimeout({
+        type: statusType,
+        message: eventData.message,
+        workflowName: eventData.workflow_name,
+      });
+    } else if (eventData.event_type === 'WORKFLOW_ERROR') {
+        handleWorkflowError(eventData, eventData.workflow_name);
+    }
+  }, [addMessage, clearWorkflowStatus, setWorkflowStatusWithTimeout, handleWorkflowError, clearFileProcessingTimeout]); 
+
   useEffect(() => {
     const storedId = getStoredConsultationId();
     if (storedId) {
@@ -146,146 +319,6 @@ export default function ActiveConsultation({ consultationType, onClose }: Active
     });
   }, []);
 
-  const handleSseError = useCallback((error: Event) => {
-    logger.error('SSE Connection Error callback in ActiveConsultation:', error);
-    setSseConnected(false);
-    setIsReconnectingSse(true); 
-    setWorkflowStatusWithTimeout({
-      type: 'info', 
-      message: 'Connection to real-time updates lost. Attempting to reconnect...',
-      workflowName: 'connection'
-    }, 0);
-  }, [setWorkflowStatusWithTimeout]);
-
-  const handleWorkflowEvent = useCallback((eventData: WorkflowEvent) => {
-    logger.info('handleWorkflowEvent: Received SSE:', eventData);
-    
-    const currentConsultationId = getStoredConsultationId();
-    if (eventData.consultation_id !== currentConsultationId) {
-        logger.warn('SSE Event for different consultation ID received, ignoring.');
-        return;
-    }
-
-    if (eventData.workflow_name === 'connection') {
-      if (eventData.message?.includes('Connected to consultation')) {
-        logger.info('SSE: Connection message processed.');
-        setSseConnected(true);
-        setIsReconnectingSse(false);
-        const stageMatch = eventData.message.match(/Current stage: (\w+)/);
-        if (stageMatch && stageMatch[1]) {
-          setCurrentStage(stageMatch[1]);
-          logger.info(`SSE: Current stage updated to: ${stageMatch[1]}`);
-        }
-        clearWorkflowStatus();
-      } else if (eventData.message?.includes('timeout soon')) {
-        logger.warn('SSE: Connection timeout warning received.');
-        setWorkflowStatusWithTimeout({
-          type: 'info',
-          message: eventData.message,
-          workflowName: 'connection'
-        }, 0);
-      }
-      return; 
-    }
-
-    if (eventData.workflow_name === 'test_analysis') {
-      if (eventData.event_type === 'WORKFLOW_START') {
-        setIsProcessingFile(true); 
-        setWorkflowStatusWithTimeout({
-          type: 'loading',
-          message: eventData.message || 'Analyzing your test results...',
-          workflowName: 'test_analysis'
-        }, 0);
-      } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
-        if (eventData.message) {
-          addMessage({
-            id: Date.now().toString() + '-analysis-result',
-            text: eventData.message,
-            sender: 'assistant',
-            timestamp: new Date(eventData.timestamp),
-            stage: 'diagnosis_pending' 
-          });
-        }
-        setIsProcessingFile(false);
-        setIsLoading(false); 
-        setIsSending(false); 
-        clearFileProcessingTimeout();
-        setWorkflowStatusWithTimeout({
-          type: 'success', 
-          message: 'Test analysis complete.', 
-          workflowName: 'test_analysis'
-        });
-      } else if (eventData.event_type === 'WORKFLOW_ERROR') {
-        handleWorkflowError(eventData, 'test_analysis');
-      }
-      return; 
-    }
-
-    let statusType: WorkflowStatus['type'] = 'info';
-    if (eventData.event_type === 'WORKFLOW_ERROR') statusType = 'error';
-    else if (eventData.event_type === 'WORKFLOW_COMPLETE') statusType = 'success';
-    else if (eventData.event_type === 'WORKFLOW_START' || eventData.event_type === 'WORKFLOW_PROGRESS') statusType = 'loading';
-
-    if (eventData.event_type === 'WORKFLOW_START' || eventData.event_type === 'WORKFLOW_PROGRESS') {
-      setIsLoading(true);
-      setWorkflowStatusWithTimeout({
-        type: statusType,
-        message: eventData.message,
-        workflowName: eventData.workflow_name,
-      }, 0);
-    } else if (eventData.event_type === 'WORKFLOW_COMPLETE') {
-      setIsLoading(false);
-      setIsSending(false); 
-
-      if (eventData.message) { 
-        addMessage({
-            id: Date.now().toString() + '-workflow-' + eventData.workflow_name,
-            text: eventData.message,
-            sender: 'assistant', 
-            timestamp: new Date(eventData.timestamp),
-            stage: eventData.workflow_name 
-        });
-      }
-      
-      if (eventData.workflow_name === 'test_recommendation') {
-        setShowRequisitionButton(true);
-      }
-      
-      setWorkflowStatusWithTimeout({
-        type: statusType,
-        message: eventData.message,
-        workflowName: eventData.workflow_name,
-      });
-    } else if (eventData.event_type === 'WORKFLOW_ERROR') {
-        handleWorkflowError(eventData, eventData.workflow_name);
-    }
-  }, [addMessage, clearWorkflowStatus, setWorkflowStatusWithTimeout]); 
-
-  const handleWorkflowError = useCallback((eventData: WorkflowEvent, workflowName: string) => {
-    addMessage({
-        id: Date.now().toString() + '-workflow-error-' + workflowName,
-        text: `An issue occurred with ${workflowName}: ${eventData.message}`,
-        sender: 'system',
-        timestamp: new Date(eventData.timestamp),
-    });
-    setIsLoading(false);
-    setIsSending(false);
-    setIsProcessingFile(false);
-    clearFileProcessingTimeout();
-    setWorkflowStatusWithTimeout({
-      type: 'error',
-      message: eventData.message,
-      workflowName: workflowName,
-    }, 7000);
-  }, [addMessage, setWorkflowStatusWithTimeout]);
-
-  const clearFileProcessingTimeout = useCallback(() => {
-    if (fileProcessingTimeoutRef.current) {
-      clearTimeout(fileProcessingTimeoutRef.current);
-      fileProcessingTimeoutRef.current = null;
-    }
-  }, []);
-  
   useEffect(() => {
     let isActive = true;
     

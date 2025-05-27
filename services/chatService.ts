@@ -74,16 +74,17 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
     formData.append('file', fileToUpload);
   }
 
-  // Track if this is our timeout
-  let isOurTimeout = false;
+  let isTimeoutAbort = false;
   
   try {
     const controller = new AbortController();
+    // Increase client timeout to match backend processing time
+    const CLIENT_TIMEOUT = 250000; // 4 minutes and 10 seconds
     const clientToProxyTimeoutId = setTimeout(() => {
         logger.warn('chatService: Timeout sending request to our Next.js proxy /api/proxy/chat');
-        isOurTimeout = true; // Set flag before aborting
+        isTimeoutAbort = true;
         controller.abort();
-    }, 35000);
+    }, CLIENT_TIMEOUT);
 
     const response = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
@@ -97,7 +98,7 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
     const data: ChatResponse = await response.json();
     logger.debug('chatService: Received data from proxy:', data);
 
-    // Always update consultation ID if received, regardless of status
+    // Always update consultation ID if received
     if (data.consultation_id && data.consultation_id !== currentConsultationId) {
       setConsultationId(data.consultation_id);
       logger.info(`chatService: Consultation ID updated to ${data.consultation_id}`);
@@ -107,16 +108,15 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
     }
 
     if (response.status === 202) {
-      // Proxy signaled background processing (file upload or AI thinking timeout)
+      logger.info('chatService: Received 202 - background processing initiated');
       return {
-        ...data, // Contains consultation_id, stage, next_steps, status_detail
-        message: '', // Ensure no message is displayed in chat log for this
+        ...data,
+        message: '',
         _isBackgroundProcessing: true 
       };
     }
 
     if (!response.ok) {
-      // Handle errors relayed from the AI backend by the proxy (e.g., 4xx, 5xx)
       const errorDetail = (data as any).detail || `Error from AI service: ${response.status}`;
       logger.error(`chatService: Error from proxy/AI: ${errorDetail}`);
       if (response.status === 404 && errorDetail.toLowerCase().includes('consultation not found')) {
@@ -128,26 +128,23 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
       throw new Error(errorDetail);
     }
 
-    // This is a direct, successful response from the AI via the proxy (HTTP 200)
     return data;
 
   } catch (error: any) {
     logger.error('chatService.sendMessage: CATCH block error:', error);
     
-    // Fix: Use the flag instead of trying to detect abort reason
     if (error.name === 'AbortError') {
-      if (isOurTimeout) {
+      if (isTimeoutAbort) {
         logger.warn('chatService: Request to Next.js proxy timed out.');
         return {
           consultation_id: currentConsultationId,
           message: '', 
           stage: 'processing_error',
-          next_steps: 'Experiencing connection issues. Please wait or try again.',
+          next_steps: 'The request is taking longer than expected. Please wait for the response via real-time updates.',
           _isBackgroundProcessing: true,
           status_detail: 'client_proxy_timeout'
         };
       }
-      // Handle other abort cases
       logger.warn('chatService: Request was aborted.');
       throw new Error('Request was cancelled');
     }
@@ -198,11 +195,11 @@ export const connectToEventStream = (
 ) => {
   if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
     logger.info('SSE: connectToEventStream called while connection already open or connecting. Closing existing one first.');
-    isIntentionalClose = true; // Set flag before closing
+    isIntentionalClose = true;
     eventSource.close();
     eventSource = null;
-    currentPingHandler = null; // Also clear the handler
-    isIntentionalClose = false; // Reset flag
+    currentPingHandler = null;
+    isIntentionalClose = false;
   }
 
   const consultationId = getConsultationId();
@@ -212,6 +209,9 @@ export const connectToEventStream = (
     return;
   }
 
+  // Store the consultation ID at connection time
+  const connectionConsultationId = consultationId;
+  
   const url = `${API_BASE_URL}/consultation/${consultationId}/events`;
   logger.info(`SSE: Attempting to connect to: ${url} (Attempt: ${reconnectAttempt + 1})`);
   
@@ -220,110 +220,114 @@ export const connectToEventStream = (
     
     eventSource.onopen = () => {
       logger.info('SSE: Connection opened successfully.');
-      resetBackoff(); // Reset attempts on successful opening
+      resetBackoff();
       if (onOpen) onOpen();
     };
 
     eventSource.onmessage = (event: MessageEvent) => {
-      // Raw comment pings from server (e.g., ": ping - ...") are not delivered here by EventSource.
-      // They are comments in the SSE protocol.
-      // EventSource only delivers messages that start with "data:", "id:", or "event:".
       try {
         const eventData: WorkflowEvent = JSON.parse(event.data);
-        // logger.debug('SSE: Message event (event.data):', event.data);
+        logger.info('SSE: Received message event:', eventData);
         onEvent(eventData);
       } catch (error) {
-        logger.error('SSE: Error parsing non-JSON data in onmessage or malformed WorkflowEvent JSON:', { data: event.data, error });
-        // It's possible the server sends a non-JSON string as a "message" event.
-        // If so, onEvent should be prepared or we should filter here.
-        // For now, we assume valid WorkflowEvent JSON for "message" events.
+        logger.error('SSE: Error parsing event data:', { data: event.data, error });
       }
     };
     
-    // Create and store the ping handler for proper removal later
+    // Create and store the ping handler
     currentPingHandler = (event: MessageEvent) => {
-        // This handles events explicitly named "ping" by the server: `event: ping\ndata: {...}\n\n`
-        try {
-            const pingData = JSON.parse(event.data); // As per your example, ping data is JSON
-            logger.debug('SSE: Received named "ping" event with data:', pingData);
-            // Can be used to confirm liveness if needed.
-        } catch (error) {
-            logger.error('SSE: Error parsing JSON data for named "ping" event:', { data: event.data, error });
+      try {
+        const pingData = JSON.parse(event.data);
+        logger.debug('SSE: Received named "ping" event with data:', pingData);
+        
+        // Check for timeout warning
+        if (typeof pingData === 'object' && pingData.message?.includes('timeout soon')) {
+          logger.warn('SSE: Connection timeout warning received, preparing to reconnect');
+          // Prepare for reconnection but don't close yet
         }
+      } catch (error) {
+        logger.error('SSE: Error parsing ping event data:', { data: event.data, error });
+      }
     };
     
-    // Fix: Assign the handler to the module variable and add the listener
     eventSource.addEventListener('ping', currentPingHandler);
 
     eventSource.onerror = (errorEvent: Event) => {
-      logger.error('SSE: Connection error occurred.', { errorEvent, readyState: eventSource?.readyState });
+      logger.error('SSE: Connection error occurred.', { 
+        errorEvent, 
+        readyState: eventSource?.readyState,
+        isIntentionalClose 
+      });
       
-      if (onError) {
+      if (onError && !isIntentionalClose) {
         onError(errorEvent);
       }
       
-      // Skip reconnection if this was an intentional close
       if (isIntentionalClose) {
         logger.info('SSE: Skipping reconnection due to intentional close.');
         return;
       }
       
-      // If the EventSource is closed, it means the connection is truly gone.
-      // This could be due to the 5-min server timeout, network error, SSL error during close, etc.
       if (eventSource && eventSource.readyState === EventSource.CLOSED) {
-        const currentEventSourceInstance = eventSource; // Capture instance before nulling
-        eventSource = null; // Important: nullify to allow new EventSource creation
+        const currentEventSourceInstance = eventSource;
+        eventSource = null;
 
-        // Prevent event listeners from being called on the old, closed instance
+        // Cleanup
         currentEventSourceInstance.onopen = null;
         currentEventSourceInstance.onmessage = null;
         currentEventSourceInstance.onerror = null;
-        // Fix: Use the stored handler reference for proper removal
         if (currentPingHandler) {
           currentEventSourceInstance.removeEventListener('ping', currentPingHandler);
-          currentPingHandler = null; // Clear the reference after removal
+          currentPingHandler = null;
         }
 
         const backoffTime = getBackoffTime();
         if (backoffTime > 0) {
           logger.info(`SSE: Connection closed. Attempting to reconnect in ${backoffTime}ms (attempt ${reconnectAttempt} of ${MAX_RECONNECT_ATTEMPTS})...`);
+          
           setTimeout(() => {
             const currentConsultationId = getConsultationId();
             // Only reconnect if it's still the same consultation
-            if (currentConsultationId === consultationId && !eventSource) { 
+            if (currentConsultationId === connectionConsultationId && !eventSource) { 
+              logger.info(`SSE: Reconnecting for consultation ${currentConsultationId}`);
               connectToEventStream(onEvent, onError, onOpen);
             } else {
-              logger.info(`SSE: Reconnection aborted; consultation ID changed from ${consultationId} to ${currentConsultationId} or new EventSource already active.`);
+              logger.info(`SSE: Reconnection aborted; consultation changed or new connection established.`);
+              resetBackoff();
             }
           }, backoffTime);
         } else {
-          logger.error('SSE: Max reconnection attempts reached. Giving up on automatic reconnections.');
+          logger.error('SSE: Max reconnection attempts reached.');
+          // Reset attempts for next manual connection
+          resetBackoff();
           if (onError) onError(new Event('MaxRetriesReached')); 
         }
       } else {
-        // If readyState is CONNECTING, the browser is likely handling retries internally.
-        // If readyState is OPEN but an error occurred, it might be a non-fatal issue.
         logger.warn('SSE: Error event received, but connection not in CLOSED state. Current readyState: ' + eventSource?.readyState);
       }
     };
     
   } catch (error) {
     logger.error('SSE: Failed to create EventSource instance:', error);
+    currentPingHandler = null;
+    
     if (onError) {
       onError(new Event('EventSourceCreationError'));
     }
-    // Attempt retry if EventSource creation itself fails
+    
     const backoffTime = getBackoffTime();
     if (backoffTime > 0) {
-        logger.info(`SSE: EventSource creation failed. Retrying in ${backoffTime}ms...`);
-        setTimeout(() => {
-            if (getConsultationId()) {
-                connectToEventStream(onEvent, onError, onOpen);
-            }
-        }, backoffTime);
+      logger.info(`SSE: EventSource creation failed. Retrying in ${backoffTime}ms...`);
+      setTimeout(() => {
+        const currentConsultationId = getConsultationId();
+        if (currentConsultationId === connectionConsultationId) {
+          connectToEventStream(onEvent, onError, onOpen);
+        }
+      }, backoffTime);
     } else {
-        logger.error('SSE: Max reconnection attempts for EventSource creation reached.');
-         if (onError) onError(new Event('MaxRetriesReachedEventSourceCreation'));
+      logger.error('SSE: Max reconnection attempts for EventSource creation reached.');
+      resetBackoff();
+      if (onError) onError(new Event('MaxRetriesReachedEventSourceCreation'));
     }
   }
 };
