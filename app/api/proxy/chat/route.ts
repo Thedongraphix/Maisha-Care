@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import logger from '@/utils/logger'; // Import the logger
+import config from '@/lib/config';
 
 // Configure maximum duration for this function (60 seconds for Pro plan)
 export const maxDuration = 60;
@@ -7,10 +8,10 @@ export const maxDuration = 60;
 // Mark this route as dynamic
 export const dynamic = 'force-dynamic';
 
-// Use environment variable with fallback
-const API_BASE_URL = process.env.AI_BACKEND_URL || 'https://v2deployment-production.up.railway.app';
-const AI_RESPONSE_TIMEOUT = 240000; // 4 minutes (was 28 seconds)
-const FILE_UPLOAD_TIMEOUT = 180000; // 3 minutes for file upload
+// Use centralized configuration
+const API_BASE_URL = config.AI_BACKEND_URL;
+const AI_RESPONSE_TIMEOUT = config.timeouts.CHAT_REQUEST;
+const FILE_UPLOAD_TIMEOUT = config.timeouts.FILE_UPLOAD;
 
 // Track active uploads for potential cleanup/status
 const activeUploads = new Map<string, AbortController>();
@@ -28,8 +29,8 @@ export async function POST(request: NextRequest) {
     clientConsultationId = formData.get('consultation_id') as string | null;
     logger.info(`Chat Proxy: Parsed form data. Consultation ID: ${clientConsultationId}`);
 
-    // Basic validation
-    if (clientConsultationId && !/^[a-f0-9-]{36}$/i.test(clientConsultationId)) {
+    // Basic validation using centralized regex
+    if (clientConsultationId && !config.UUID_REGEX.test(clientConsultationId)) {
       logger.warn(`Chat Proxy: Invalid consultation ID format: ${clientConsultationId}`);
       return NextResponse.json(
         { detail: 'Invalid consultation ID format' },
@@ -186,4 +187,4 @@ export function cleanup() {
     controller.abort();
   });
   activeUploads.clear();
-} 
+}

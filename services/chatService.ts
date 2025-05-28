@@ -1,7 +1,8 @@
 import logger from '@/utils/logger';
+import config from '@/lib/config';
 
-// Use proxy routes instead of direct API calls
-const API_BASE_URL = '/api/proxy';
+// Use centralized configuration
+const API_BASE_URL = config.API_PROXY_BASE;
 
 // API response types from integration.md
 export interface ChatResponse {
@@ -78,13 +79,12 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
   
   try {
     const controller = new AbortController();
-    // Increase client timeout to match backend processing time
-    const CLIENT_TIMEOUT = 250000; // 4 minutes and 10 seconds
+    const timeoutToUse = fileToUpload ? config.timeouts.FILE_UPLOAD : config.timeouts.CHAT_REQUEST;
     const clientToProxyTimeoutId = setTimeout(() => {
         logger.warn('chatService: Timeout sending request to our Next.js proxy /api/proxy/chat');
         isTimeoutAbort = true;
         controller.abort();
-    }, CLIENT_TIMEOUT);
+    }, timeoutToUse);
 
     const response = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
@@ -155,9 +155,9 @@ export async function sendMessage(messageText: string, fileToUpload?: File): Pro
 
 let eventSource: EventSource | null = null;
 export let reconnectAttempt = 0; // Export for potential read-only access if needed, though direct use is discouraged
-export const MAX_RECONNECT_ATTEMPTS = 5;
-const BASE_RECONNECT_DELAY = 2000;
-const MAX_RECONNECT_DELAY = 30000;
+export const MAX_RECONNECT_ATTEMPTS = config.sse.MAX_RECONNECT_ATTEMPTS;
+const BASE_RECONNECT_DELAY = config.sse.BASE_RECONNECT_DELAY;
+const MAX_RECONNECT_DELAY = config.sse.MAX_RECONNECT_DELAY;
 
 // Flag to prevent reconnection during intentional closure or while a reconnection attempt is pending
 let isIntentionalClose = false;
@@ -171,9 +171,9 @@ function getBackoffTime(): number {
     logger.error("SSE: Max reconnection attempts reached.");
     return -1; // Indicate no more retries
   }
-  // Exponential backoff with jitter
+  // Exponential backoff with jitter - simplified
   const delay = Math.min(
-    BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempt) + Math.random() * 1000, 
+    BASE_RECONNECT_DELAY * Math.pow(1.5, reconnectAttempt) + Math.random() * 1000, 
     MAX_RECONNECT_DELAY
   );
   reconnectAttempt++;
@@ -211,19 +211,25 @@ export const connectToEventStream = (
     return;
   }
 
+  // Validate consultation ID format
+  if (!config.UUID_REGEX.test(consultationId)) {
+    logger.warn(`SSE: Invalid consultation ID format: ${consultationId}`);
+    if (onError) onError(new Event('InvalidConsultationID'));
+    return;
+  }
+
   // Store the consultation ID at the time of this connection attempt
-  // Used to prevent reconnection if the ID changes later.
   const connectionConsultationId = consultationId;
 
   isIntentionalClose = false; // Reset for this new connection attempt
-  if (reconnectionTimeoutId) { // Clear any pending reconnection timeout from a previous attempt
+  if (reconnectionTimeoutId) { 
       logger.debug('SSE: Clearing previous reconnection timeout.');
       clearTimeout(reconnectionTimeoutId);
       reconnectionTimeoutId = null;
   }
 
   const url = `${API_BASE_URL}/consultation/${consultationId}/events`;
-  logger.info(`SSE: Attempting to connect to: ${url} (Attempt: ${reconnectAttempt + 1} / ${MAX_RECONNECT_ATTEMPTS +1 })`);
+  logger.info(`SSE: Attempting to connect to: ${url} (Attempt: ${reconnectAttempt + 1} / ${MAX_RECONNECT_ATTEMPTS + 1})`);
   
   try {
     eventSource = new EventSource(url);
@@ -262,7 +268,7 @@ export const connectToEventStream = (
     eventSource.addEventListener('ping', currentPingHandler);
 
     eventSource.onerror = (errorEvent: Event) => {
-      const currentReadyState = eventSource?.readyState; // Capture before nullifying
+      const currentReadyState = eventSource?.readyState;
       logger.error('SSE: Connection error occurred on EventSource.', {
         errorEvent,
         readyState: currentReadyState,
@@ -276,7 +282,7 @@ export const connectToEventStream = (
 
       // Clean up the current failing EventSource instance
       if (eventSource) {
-        const oldEventSource = eventSource; // Keep a reference for cleanup
+        const oldEventSource = eventSource;
         eventSource = null; // Nullify the global reference immediately
 
         oldEventSource.onopen = null;
@@ -286,13 +292,13 @@ export const connectToEventStream = (
           oldEventSource.removeEventListener('ping', currentPingHandler);
           currentPingHandler = null;
         }
-        oldEventSource.close(); // This should ensure its readyState becomes CLOSED
+        oldEventSource.close();
         logger.info('SSE: Closed failed EventSource instance.');
       }
 
       if (isIntentionalClose) {
         logger.info('SSE: Skipping reconnection due to intentional close flag.');
-        resetBackoff(); // Clear any pending retry timers and attempts count
+        resetBackoff();
         return;
       }
 
@@ -301,13 +307,12 @@ export const connectToEventStream = (
       if (backoffTime > 0) {
         logger.info(`SSE: Connection error. Attempting to reconnect in ${backoffTime}ms (attempt ${reconnectAttempt} of ${MAX_RECONNECT_ATTEMPTS})...`);
 
-        if (reconnectionTimeoutId) clearTimeout(reconnectionTimeoutId); // Clear previous if any
+        if (reconnectionTimeoutId) clearTimeout(reconnectionTimeoutId);
 
         reconnectionTimeoutId = setTimeout(() => {
-          reconnectionTimeoutId = null; // Clear the stored ID once the timeout executes
+          reconnectionTimeoutId = null;
           const currentConsultationIdForRetry = getConsultationId();
-          // Only reconnect if it's still the same consultation AND no new eventSource was created in the meantime
-          // (e.g., by a direct call to connectToEventStream)
+          // Only reconnect if it's still the same consultation AND no new eventSource was created
           if (currentConsultationIdForRetry === connectionConsultationId && !eventSource) {
             logger.info(`SSE: Reconnecting for consultation ${currentConsultationIdForRetry}`);
             connectToEventStream(onEvent, onError, onOpen); // Recursive call to reconnect
@@ -315,22 +320,22 @@ export const connectToEventStream = (
             if (currentConsultationIdForRetry !== connectionConsultationId) {
                 logger.info(`SSE: Reconnection aborted; consultation ID changed. Old: ${connectionConsultationId}, New: ${currentConsultationIdForRetry}`);
             } else if (eventSource) {
-                logger.info(`SSE: Reconnection aborted; a new EventSource instance already exists or was created.`);
+                logger.info(`SSE: Reconnection aborted; a new EventSource instance already exists.`);
             }
-            resetBackoff(); // Reset attempts if not actually reconnecting
+            resetBackoff();
           }
         }, backoffTime);
       } else {
         logger.error('SSE: Max reconnection attempts reached after error. No more automatic retries.');
         if (onError) onError(new Event('MaxRetriesReached'));
-        resetBackoff(); // Reset attempts for future manual connection
+        resetBackoff();
       }
     };
     
-  } catch (error) { // Catches errors from `new EventSource(url)` itself
-    logger.error('SSE: Failed to create EventSource instance (e.g., network issue, invalid URL):', error);
-    currentPingHandler = null; // Ensure cleared if addEventListener failed
-    if (eventSource) { // Defensive: ensure eventSource is null if creation failed badly
+  } catch (error) {
+    logger.error('SSE: Failed to create EventSource instance:', error);
+    currentPingHandler = null;
+    if (eventSource) {
         eventSource.close();
         eventSource = null;
     }
@@ -340,7 +345,7 @@ export const connectToEventStream = (
     }
 
     // Fallback retry for EventSource creation failure
-    if (!isIntentionalClose) { // Only retry if not an intentional close
+    if (!isIntentionalClose) {
         const backoffTime = getBackoffTime();
         if (backoffTime > 0) {
           logger.info(`SSE: EventSource creation failed. Retrying in ${backoffTime}ms...`);
@@ -348,7 +353,7 @@ export const connectToEventStream = (
           reconnectionTimeoutId = setTimeout(() => {
             reconnectionTimeoutId = null;
             const currentConsultationIdForRetry = getConsultationId();
-            if (currentConsultationIdForRetry === connectionConsultationId && !eventSource) { // Check ID and if eventSource is still null
+            if (currentConsultationIdForRetry === connectionConsultationId && !eventSource) {
               connectToEventStream(onEvent, onError, onOpen);
             } else {
               logger.info('SSE: Aborting retry for EventSource creation due to changed conditions.');
@@ -391,10 +396,6 @@ export function disconnectEventStream(): void {
   } else {
     logger.info('SSE: No active event stream to disconnect.');
   }
-  // resetBackoff(); // Consider if backoff attempts should always be reset on manual disconnect
-  // Keeping attempts means if user disconnects/reconnects quickly to a still problematic source,
-  // it will continue backoff. Resetting means it starts fresh.
-  // For now, let onopen reset backoff for a "successful" connection.
 }
 
 /**
@@ -409,7 +410,15 @@ export async function fetchRequisitionData(): Promise<TestRequisitionData | null
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/consultation/${consultationId}/requisition-data`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), config.timeouts.HEALTH_CHECK);
+
+    const response = await fetch(`${API_BASE_URL}/consultation/${consultationId}/requisition-data`, {
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
       if (response.status === 404) {
         logger.warn(`fetchRequisitionData: No requisition data found for consultation ${consultationId} (404).`);

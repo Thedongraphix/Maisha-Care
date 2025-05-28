@@ -1,7 +1,4 @@
-// Update to use a local proxy instead of direct API calls
-// const API_BASE_URL = 'http://ai-engine-production-487a.up.railway.app';
-const API_BASE_URL = '/api/proxy';  // This will use a local API route as a proxy
-const DIRECT_API_URL = 'https://v2deployment-production.up.railway.app';
+import config from '@/lib/config';
 
 // Define interfaces for API responses
 interface HealthCheckResponse {
@@ -17,20 +14,19 @@ interface DirectTestResponse {
 }
 
 /**
- * Check if the API is available
+ * Check if the API is available through proxy
  * @returns Promise with health check status
  */
 export async function checkAPIHealth(): Promise<HealthCheckResponse> {
   try {
-    console.log('Checking API health at:', API_BASE_URL);
+    console.log('Checking API health at:', config.API_PROXY_BASE);
     
-    // Create a timeout controller that works in all browsers
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), config.timeouts.HEALTH_CHECK);
     
     console.log('Making health check GET request...');
     
-    const response = await fetch(`${API_BASE_URL}`, {
+    const response = await fetch(`${config.API_PROXY_BASE}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -38,7 +34,6 @@ export async function checkAPIHealth(): Promise<HealthCheckResponse> {
       signal: controller.signal
     });
     
-    // Clear the timeout if the request completes
     clearTimeout(timeoutId);
     
     console.log('Health check response status:', response.status);
@@ -62,7 +57,7 @@ export async function checkAPIHealth(): Promise<HealthCheckResponse> {
 }
 
 /**
- * Test a direct connection to the API through our proxy
+ * Test connection to the API through our proxy
  * @param testMessage - Optional test message to send
  * @returns Promise with test results
  */
@@ -70,10 +65,12 @@ export async function testDirectAPIConnection(testMessage?: string): Promise<Dir
   try {
     const message = testMessage || "Hello, this is a test message from Maisha Care.";
     
-    console.log('Testing direct API connection with message:', message);
+    console.log('Testing API connection with message:', message);
     
-    // Use the proxy endpoint for testing
-    const response = await fetch('/api/proxy/chat', {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), config.timeouts.HEALTH_CHECK);
+    
+    const response = await fetch(`${config.API_PROXY_BASE}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -81,8 +78,10 @@ export async function testDirectAPIConnection(testMessage?: string): Promise<Dir
       body: JSON.stringify({
         message: message,
       }),
+      signal: controller.signal
     });
     
+    clearTimeout(timeoutId);
     console.log('Test response status:', response.status);
     
     if (response.ok) {
@@ -126,12 +125,12 @@ export interface Message {
   content: string;
 }
 
-// Core function for sending messages to the AI
+// Core function for sending messages to the AI - SIMPLIFIED to use only proxy
 export async function sendMessageToAI(message: string, conversationHistory: Array<{role: 'user' | 'assistant', content: string}>) {
-  console.log('Sending message to AI:', { message, historyLength: conversationHistory.length });
+  console.log('Sending message to AI via proxy:', { message, historyLength: conversationHistory.length });
   
   try {
-    // Get the consultation ID from the last response if available
+    // Get the consultation ID from localStorage
     const consultationId = getConsultationIdFromHistory(conversationHistory);
     
     const requestBody = {
@@ -141,47 +140,11 @@ export async function sendMessageToAI(message: string, conversationHistory: Arra
     
     console.log('Request payload:', JSON.stringify(requestBody));
     
-    // Create a timeout controller
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), config.timeouts.CHAT_REQUEST);
     
-    // Try direct HTTPS connection first
-    try {
-      console.log('Trying direct HTTPS connection to API...');
-      const directResponse = await fetch(`${DIRECT_API_URL}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      });
-      
-      if (directResponse.ok) {
-        // Clear the timeout
-        clearTimeout(timeoutId);
-        
-        const data = await directResponse.json();
-        console.log('AI direct response data:', data);
-        
-        // Store the consultation_id in localStorage for future use
-        if (data.consultation_id) {
-          localStorage.setItem('maisha_consultation_id', data.consultation_id);
-        }
-        
-        return {
-          message: data.message || "Sorry, I couldn't process your message."
-        };
-      } else {
-        console.log('Direct connection failed, trying proxy...');
-      }
-    } catch (directError) {
-      console.log('Direct connection error:', directError);
-      // Continue to proxy approach
-    }
-    
-    // If direct connection failed, try through proxy
-    const response = await fetch(`${API_BASE_URL}/chat`, {
+    // Use ONLY proxy route to avoid conflicts
+    const response = await fetch(`${config.API_PROXY_BASE}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -190,7 +153,6 @@ export async function sendMessageToAI(message: string, conversationHistory: Arra
       signal: controller.signal
     });
     
-    // Clear the timeout
     clearTimeout(timeoutId);
 
     if (!response.ok) {
@@ -251,21 +213,15 @@ export async function sendFileToAI(file: File) {
       formData.append('consultation_id', consultationId);
     }
 
-    // The API doesn't seem to have a dedicated file upload endpoint
-    // So we'll use a generic /upload endpoint or fallback
-    const uploadEndpoint = `${API_BASE_URL}/upload`;
-    
-    // Create a timeout controller
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for file uploads
+    const timeoutId = setTimeout(() => controller.abort(), config.timeouts.FILE_UPLOAD);
     
-    const response = await fetch(uploadEndpoint, {
+    const response = await fetch(`${config.API_PROXY_BASE}/chat`, {
       method: 'POST',
       body: formData,
       signal: controller.signal
     });
     
-    // Clear the timeout
     clearTimeout(timeoutId);
 
     if (!response.ok) {
@@ -291,16 +247,14 @@ export async function analyzeCase() {
   }
   
   try {
-    // Create a timeout controller
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), config.timeouts.HEALTH_CHECK);
     
-    const response = await fetch(`${API_BASE_URL}/analyze-case?consultation_id=${consultationId}`, {
+    const response = await fetch(`${config.API_PROXY_BASE}/analyze-case?consultation_id=${consultationId}`, {
       method: 'POST',
       signal: controller.signal
     });
     
-    // Clear the timeout
     clearTimeout(timeoutId);
     
     if (!response.ok) {
@@ -332,11 +286,10 @@ export async function generateTreatmentPlan(doctorNotes?: string) {
       encrypted: false
     };
     
-    // Create a timeout controller
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), config.timeouts.CHAT_REQUEST);
     
-    const response = await fetch(`${API_BASE_URL}/generate-treatment-plan`, {
+    const response = await fetch(`${config.API_PROXY_BASE}/generate-treatment-plan`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -345,7 +298,6 @@ export async function generateTreatmentPlan(doctorNotes?: string) {
       signal: controller.signal
     });
     
-    // Clear the timeout
     clearTimeout(timeoutId);
     
     if (!response.ok) {

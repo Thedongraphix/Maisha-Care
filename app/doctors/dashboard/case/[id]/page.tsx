@@ -4,6 +4,7 @@ import { ArrowLeft,  AlertCircle, Check } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import logger from '../../../../../lib/logger';
+import config from '@/lib/config';
 
 // Using direct consultation interface from the AI
 interface Consultation {
@@ -179,10 +180,13 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         
         // Direct API call to get consultation data with history
         const timestamp = Date.now();
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://ai-engine-production-487a.up.railway.app';
+        const apiBaseUrl = config.AI_BACKEND_URL;
         const url = `${apiBaseUrl}/consultation/${params.id}?include_history=true&t=${timestamp}`;
         
         logger.info(`Fetching consultation details directly from: ${url}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), config.timeouts.HEALTH_CHECK);
         
         const response = await fetch(url, {
           method: 'GET',
@@ -192,8 +196,11 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
             'Pragma': 'no-cache',
             'Expires': '0'
           },
-          cache: 'no-store'
+          cache: 'no-store',
+          signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
           throw new Error(`Failed to fetch consultation: ${response.status}`);

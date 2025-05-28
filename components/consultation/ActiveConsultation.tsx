@@ -14,6 +14,7 @@ import {
 } from '@/services/chatService';
 import { resetChatState, getConsultationId as getStoredConsultationId, saveConsultationId } from '@/utils/consultationUtils';
 import logger from '@/utils/logger';
+import config from '@/lib/config';
 import { Paperclip, Send, FileText, AlertCircle, Info, RotateCcw, XCircle, DownloadCloud, CheckCircle2, Mic, Square } from 'lucide-react';
 import { ThreeDots } from 'react-loader-spinner';
 import { jsPDF } from 'jspdf';
@@ -37,14 +38,8 @@ interface WorkflowStatus {
   timeoutId?: NodeJS.Timeout;
 }
 
-const ALLOWED_FILE_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-];
-const MAX_FILE_SIZE_MB = 10;
+const ALLOWED_FILE_TYPES = config.files.ALLOWED_TYPES;
+const MAX_FILE_SIZE_MB = config.files.MAX_SIZE_MB;
 const WORKFLOW_STATUS_CLEAR_DELAY = 5000;
 
 interface ActiveConsultationProps {

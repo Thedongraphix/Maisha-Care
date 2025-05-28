@@ -1,9 +1,10 @@
 import { NextRequest } from 'next/server';
 import logger from '@/utils/logger';
+import config from '@/lib/config';
 
-const API_BASE_URL = process.env.AI_BACKEND_URL || 'https://v2deployment-production.up.railway.app';
-const SSE_IDLE_TIMEOUT = 60000; // 30 seconds without data
-const MAX_RECONNECT_ATTEMPTS = 12;
+const API_BASE_URL = config.AI_BACKEND_URL;
+const SSE_IDLE_TIMEOUT = config.timeouts.SSE_IDLE;
+const MAX_RECONNECT_ATTEMPTS = config.sse.MAX_RECONNECT_ATTEMPTS;
 
 // UUID validation regex
 const UUID_REGEX = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
